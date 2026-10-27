@@ -101,12 +101,15 @@ describe("generatePTBuilderScript: PTBuilder execution simulation", () => {
       server: "line\nbreak\r'q'",
     };
     const t = new Topology();
-    t.addDevice({ name: names.router, model: "2911", x: 0, y: 0 });
-    t.addDevice({ name: names.sw, model: "2960-24TT", x: 100, y: 0 });
-    t.addDevice({ name: names.pc, model: "PC-PT", x: 200, y: 0 });
+    // addDevice rejects these names (DEVICE_NAME), so they are inserted directly: the generator must still quote them.
+    expect(() => t.addDevice({ name: names.router, model: "2911" })).toThrow(/Invalid device name/);
+    const put = (name: string, model: string, x: number) => t.devices.set(name, { name, model, x, y: 0 });
+    put(names.router, "2911", 0);
+    put(names.sw, "2960-24TT", 100);
+    put(names.pc, "PC-PT", 200);
     // Hub-PT has no port data, so any port name is accepted and must survive verbatim.
-    t.addDevice({ name: names.hub, model: "Hub-PT", x: 300, y: 0 });
-    t.addDevice({ name: names.server, model: "Server-PT", x: 400, y: 0 });
+    put(names.hub, "Hub-PT", 300);
+    put(names.server, "Server-PT", 400);
     const hubPort1 = 'Port "0" // \u2028 */ \\';
     const hubPort2 = "Port 1//";
     t.addLink({ dev1: names.router, port1: "Gi0/0", dev2: names.sw, port2: "Gi0/1" });
@@ -155,8 +158,10 @@ describe("generatePTBuilderScript: PTBuilder execution simulation", () => {
 
   it("still runs every statement when names contain what would otherwise end a comment or the line", () => {
     const t = new Topology();
+    // "a//b" is a valid device name; the others can only come from a hand-built state, so they are inserted directly.
+    t.addDevice({ name: "a//b", model: "PC-PT", x: 0, y: 0 });
     const tricky = ["a//b", "c*/d", "/*e", "f\\", "g\u2028h", "i\nj"];
-    tricky.forEach((name, i) => t.addDevice({ name, model: "PC-PT", x: i, y: i }));
+    tricky.slice(1).forEach((name, i) => t.devices.set(name, { name, model: "PC-PT", x: i + 1, y: i + 1 }));
     const calls = runInPTBuilder(generatePTBuilderScript(t));
     expect(calls.map((c) => c[1])).toEqual(tricky);
   });
@@ -196,6 +201,16 @@ describe("generatePTBuilderScript: arguments", () => {
     const lines = generatePTBuilderScript(t).split("\n");
     expect(lines).toContain('configurePcIp("PC1", true);');
     expect(lines).toContain('configurePcIp("PC2", true, "", "", "", "8.8.8.8");');
+  });
+
+  it("configures hosts with a verified FastEthernet0 first, so an unverified one that throws cannot skip them", () => {
+    const t = new Topology();
+    const hosts = [["L1", "Laptop-PT"], ["PC1", "PC-PT"], ["P1", "Printer-PT"], ["SRV1", "Server-PT"], ["PC2", "PC-PT"]];
+    for (const [name, model] of hosts) t.addDevice({ name, model });
+    for (const [name] of hosts) t.configurePc({ name, dhcp: true });
+    const order = runInPTBuilder(generatePTBuilderScript(t)).filter((c) => c[0] === "configurePcIp").map((c) => c[1]);
+    // Verified (PC-PT, Server-PT) in insertion order, then unverified (Laptop-PT, Printer-PT) in insertion order.
+    expect(order).toEqual(["PC1", "SRV1", "PC2", "L1", "P1"]);
   });
 
   it("passes every static field positionally, with empty strings for missing gateway and DNS", () => {

@@ -21,7 +21,7 @@ Use `npm ci`, which installs exactly what `package-lock.json` pins. If you need 
 | `npm run build` | Compile `src/` to `build/` (cleans first). |
 | `npm run dev` | Run the server from source with `tsx`. |
 | `npm start` | Run `build/index.js`. |
-| `npm run typecheck` | `tsc --noEmit`. |
+| `npm run typecheck` | `tsc --noEmit` on `src/`, then on the tests (`test/tsconfig.json`). |
 | `npm test` / `npm run test:watch` | Vitest, once or in watch mode. |
 | `npm run examples` | Build, then regenerate `examples/*/script.js`. Fails if an example has validation errors. |
 

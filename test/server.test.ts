@@ -1,8 +1,8 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { ErrorCode, McpError, type CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 import { makeTempDir, runInPTBuilder, setTracerDir } from "./helpers.js";
@@ -159,6 +159,38 @@ describe("tools/call", () => {
     expect(JSON.parse((await ok("get_topology")).text).devices).toEqual([]);
   });
 
+  it("enforces the device name rule, the coordinate range and the input size limits", async () => {
+    const badName = await call("add_device", { name: "R1 & del", model: "2911" });
+    expect(badName.isError).toBe(true);
+    expect(badName.text).toMatch(/^Error: Invalid device name "R1 & del": use 1-64 characters: letters, digits, spaces and \. _ \( \) \/ -/);
+    expect((await call("add_device", { name: "constructor", model: "2911" })).text).toMatch(/is a reserved name/);
+
+    const far = await call("add_device", { name: "R1", model: "2911", x: 6e17, y: 100 });
+    expect(far.isError).toBe(true);
+    expect(far.text).toMatch(/Input validation error/);
+
+    const tooLong = [
+      call("add_device", { name: "x".repeat(65), model: "2911" }),
+      call("add_device", { name: "R1", model: "x".repeat(65) }),
+      call("add_link", { dev1: "a", port1: "p".repeat(65), dev2: "c", port2: "d" }),
+      call("configure_device", { name: "R1", ios_commands: ["x".repeat(513)] }),
+      call("configure_device", { name: "R1", ios_commands: Array(2001).fill("ip routing") }),
+      call("configure_pc", { name: "PC1", ip: "1".repeat(33) }),
+      call("build_topology", { devices: Array.from({ length: 501 }, (_, i) => ({ name: `PC${i}`, model: "PC-PT" })) }),
+      call("save_topology", { path: "x".repeat(1025) }),
+    ];
+    for (const r of await Promise.all(tooLong)) {
+      expect(r.isError).toBe(true);
+      expect(r.text).toMatch(/Input validation error/);
+    }
+    expect(JSON.parse((await ok("get_topology")).text).devices).toEqual([]);
+
+    const { tools } = await client.listTools();
+    const addDevice = tools.find((t) => t.name === "add_device")!;
+    expect(addDevice.description).toContain("letters, digits, spaces and . _ ( ) / -");
+    expect(JSON.stringify(addDevice.inputSchema)).toContain('"maximum":100000');
+  });
+
   it("removes, renames and resets", async () => {
     await ok("build_topology", {
       devices: [{ name: "R1", model: "2911" }, { name: "S1", model: "2960-24TT" }, { name: "PC1", model: "PC-PT" }],
@@ -214,6 +246,17 @@ describe("resources", () => {
     expect(await readJsonResource("pt://catalog/IP%20Phone%207960")).toMatchObject({ model: "7960", resolvedFrom: "IP Phone 7960" });
     expect(await readJsonResource("pt://catalog/Router-PT")).toMatchObject({ model: "Router-PT", catalogued: false, ios: true, ports: [] });
     await expect(client.readResource({ uri: "pt://catalog/banana" })).rejects.toThrow(/Unknown model "banana"/);
+  });
+
+  it("answers an unknown model with an InvalidParams protocol error, as the SDK does for unknown resources", async () => {
+    // The SDK has no "resource not found" code (-32002), so -32602 InvalidParams it is.
+    const err = await client.readResource({ uri: "pt://catalog/constructor" }).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(McpError);
+    expect(err).toMatchObject({ code: ErrorCode.InvalidParams, data: { uri: "pt://catalog/constructor" } });
+    expect((err as Error).message).toMatch(/Unknown model "constructor"\. Closest PTBuilder model keys: /);
   });
 
   it("completes model names for the template", async () => {
@@ -365,5 +408,27 @@ describe("file tools", () => {
     await expect(readFile(path.join(dir, "x.js"), "utf8")).rejects.toThrow();
     const forced = await ok("export_script", { path: "x", force: true });
     expect(forced.text).toContain("Generated with force: true despite these issues:");
+  });
+
+  it("file tools write and read only their own extensions, so nothing executable can be produced", async () => {
+    await buildLab();
+    for (const p of ["run.cmd", "run.BAT", "lab.js", "lab.txt"]) {
+      const r = await call("save_topology", { path: p });
+      expect(r.isError, p).toBe(true);
+      expect(r.text, p).toMatch(/but only \.json files are allowed here/);
+    }
+    for (const p of ["run.cmd", "run.bat", "run.ps1", "lab.json"]) {
+      const r = await call("export_script", { path: p, force: true });
+      expect(r.isError, p).toBe(true);
+      expect(r.text, p).toMatch(/only \.js and \.txt files are allowed here/);
+    }
+    expect((await call("load_topology", { path: "run.cmd" })).text).toMatch(/only \.json files are allowed here/);
+    expect((await call("save_topology", { path: "~" })).text).toMatch(/names a directory, not a file/);
+    expect((await readdir(dir)).sort()).toEqual([]);
+
+    await ok("export_script", { path: "lab.TXT" });
+    await ok("save_topology", { path: "lab.Json" });
+    expect((await readdir(dir)).sort()).toEqual(["lab.Json", "lab.TXT"]);
+    expect(await readFile(path.join(dir, "lab.TXT"), "utf8")).toMatch(/^\/\* Generated by mcp-tracer/);
   });
 });

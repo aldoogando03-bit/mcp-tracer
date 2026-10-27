@@ -22,6 +22,7 @@ Data flow:
 | `src/session.ts` | `Session { topology; replaceTopology(t) }`. One per server process; state is lost on restart. |
 | `src/topology.ts` | The model: devices, links, IOS configs, host IPs. Mutators, `toJSON()` / `fromJSON()`, `fromSpec()` (atomic `build_topology`). |
 | `src/catalog.ts` | Models (exact PTBuilder keys, aliases, category, ports with `verified` flags), `PTBUILDER_MODELS`, `resolveModel`, `normalizePort`. |
+| `src/ipv4.ts` | IPv4 parse/format, mask ↔ prefix helpers shared by `topology.ts`, `validate.ts` and `prompts.ts`. |
 | `src/cables.ts` | Cable types, port-kind/cable compatibility, `inferCable` (used when a link has no cable). |
 | `src/validate.ts` | `validate(t) → { errors, warnings }` with stable `UPPER_SNAKE` issue codes; `formatValidation`. |
 | `src/layout.ts` | `layoutPositions(t)`: keeps explicit x/y, places the rest in rows (routers → L3 switches → switches → hosts). |
@@ -46,13 +47,14 @@ Only `src/index.ts`, `src/server.ts`, `src/tools/*`, `src/resources.ts` and `src
 - Every string emitted into the generated script goes through `q()` (JSON.stringify + U+2028/U+2029 escaping).
 - Emission order: devices → links → IOS configs → host IPs.
 - New validation checks get a new stable code; never reuse or rename a code.
+- Input limits live in `LIMITS` (`src/topology.ts`) and apply in three places that must agree: the tool zod schemas, `topologyJsonSchema` and the mutators (so anything the mutators accept can be saved and loaded back). Device names follow `DEVICE_NAME` (1-64 chars: letters, digits, space, `. _ ( ) / -`, alphanumeric first; `constructor`/`prototype` reserved). File tools only accept `.json` (save/load) or `.js`/`.txt` (export). Key lookups on user input with a `Map` or `Object.hasOwn`, never a plain object.
 
 ## Commands
 
 ```bash
 npm ci             # use npm >= 11 if you must regenerate package-lock.json (npm 10 crashes on vite's peers)
 npm run build      # clean + tsc -> build/
-npm run typecheck  # tsc --noEmit
+npm run typecheck  # tsc --noEmit on src, then on the tests (test/tsconfig.json)
 npm start          # node build/index.js (stdio server, waits for a client)
 npm run dev        # tsx src/index.ts, no build step
 npm test           # vitest run

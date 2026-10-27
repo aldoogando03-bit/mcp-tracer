@@ -5,7 +5,7 @@ import { CATALOG, findPort, formatPorts, getModelInfo, type Category } from "../
 import { layoutPositions } from "../layout.js";
 import { issueReport, plural, renderScript } from "../render.js";
 import type { Session } from "../session.js";
-import { Topology, type Link } from "../topology.js";
+import { DEVICE_NAME_RULE, LIMITS, Topology, fmtLink } from "../topology.js";
 import { formatValidation, validate } from "../validate.js";
 import { safe, text } from "./util.js";
 
@@ -20,32 +20,50 @@ const PORTS = CATALOG.filter((m) => ["router", "switch", "l3switch", "host"].inc
   .map((m) => `${m.model}: ${formatPorts(m.ports.filter((p) => CABLING.has(p.kind)))}${m.portsVerified === "unverified" ? " (unverified)" : ""}`)
   .join("; ");
 
-const name = z.string().min(1).describe("Device name, e.g. R1, S1, PC1 (case-insensitive).");
-const port = z.string().min(1).describe("Interface name, e.g. GigabitEthernet0/0, FastEthernet0/1, FastEthernet0 (abbreviations such as Gi0/0 are expanded).");
+const name = z.string().min(1).max(LIMITS.name).describe("Device name, e.g. R1, S1, PC1 (case-insensitive).");
+const newName = (what: string) =>
+  z.string().min(1).max(LIMITS.name).describe(`${what}, e.g. R1, S1, PC1: ${DEVICE_NAME_RULE}. Names are case-insensitive.`);
+const port = z
+  .string()
+  .min(1)
+  .max(LIMITS.port)
+  .describe("Interface name, e.g. GigabitEthernet0/0, FastEthernet0/1, FastEthernet0 (abbreviations such as Gi0/0 are expanded).");
 const coord = (axis: string) =>
-  z.number().optional().describe(`${axis} coordinate on the Packet Tracer logical workspace. Omit both x and y for automatic placement.`);
+  z
+    .number()
+    .min(-LIMITS.coord)
+    .max(LIMITS.coord)
+    .optional()
+    .describe(
+      `${axis} coordinate on the Packet Tracer logical workspace, -${LIMITS.coord} to ${LIMITS.coord}. Omit both x and y for automatic placement.`
+    );
 const model = z
   .string()
   .min(1)
+  .max(LIMITS.model)
   .describe('PTBuilder model key, e.g. 2911, 2960-24TT, PC-PT. Aliases such as "4331", "WRT300N" or "PC" are resolved.');
 const cable = z
   .enum(CABLE_TYPES)
   .optional()
   .describe('Cable type. Omit it to let the server infer the right one (recommended). "auto" is passed to PT as-is and its behaviour is unverified.');
 const iosCommands = z
-  .array(z.string())
-  .describe('IOS commands in global configuration mode, one per item, e.g. ["hostname R1", "interface GigabitEthernet0/0", "ip address 192.168.1.1 255.255.255.0", "no shutdown", "exit"].');
+  .array(z.string().max(LIMITS.iosLine))
+  .max(LIMITS.iosLines)
+  .describe(
+    'IOS commands in global configuration mode, one per item, e.g. ["hostname R1", "interface GigabitEthernet0/0", ' +
+      `"ip address 192.168.1.1 255.255.255.0", "no shutdown", "exit"]. At most ${LIMITS.iosLines} items of ${LIMITS.iosLine} ` +
+      `characters; a device keeps at most ${LIMITS.iosLines} commands.`
+  );
+const ipField = (description: string) => z.string().max(LIMITS.ip).optional().describe(description);
 const pcFields = {
   name,
   dhcp: z.boolean().default(false).describe("true = obtain the address by DHCP (ip/mask/gateway are ignored)."),
-  ip: z.string().optional().describe("IPv4 address, e.g. 192.168.1.10 (or 192.168.1.10/24 to include the mask)."),
-  mask: z.string().optional().describe("Subnet mask, e.g. 255.255.255.0 or /24."),
-  gateway: z.string().optional().describe("Default gateway IPv4 address."),
-  dns: z.string().optional().describe("DNS server IPv4 address (kept with DHCP too)."),
+  ip: ipField("IPv4 address, e.g. 192.168.1.10 (or 192.168.1.10/24 to include the mask)."),
+  mask: ipField("Subnet mask, e.g. 255.255.255.0 or /24."),
+  gateway: ipField("Default gateway IPv4 address."),
+  dns: ipField("DNS server IPv4 address (kept with DHCP too)."),
 };
 const linkFields = { dev1: name, port1: port, dev2: name, port2: port, cable };
-
-const fmtLink = (l: Link) => `${l.dev1}:${l.port1} <-> ${l.dev2}:${l.port2}`;
 
 function deviceDetails(modelKey: string): string[] {
   const info = getModelInfo(modelKey);
@@ -63,8 +81,9 @@ export function registerTopologyTools(server: McpServer, session: Session) {
         "Add a device to the topology. `model` must be a PTBuilder model key; common aliases are resolved and the result " +
         'shows the canonical key ("4331" -> ISR4331, "WRT300N" -> Linksys-WRT300N, "ASA5505" -> 5505, "IP Phone 7960" -> 7960, ' +
         `"PC" -> PC-PT). ${MODELS} The pt://catalog resource lists every accepted key and its ports. ` +
-        "Names must be unique (case-insensitive). Omit x and y to place the device automatically. The result lists the device's ports.",
-      inputSchema: { name, model, x: coord("X"), y: coord("Y") },
+        `Names must be unique (case-insensitive), ${DEVICE_NAME_RULE}. At most ${LIMITS.devices} devices. ` +
+        "Omit x and y to place the device automatically. The result lists the device's ports.",
+      inputSchema: { name: newName("Unique device name"), model, x: coord("X"), y: coord("Y") },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     (a) =>
@@ -82,7 +101,8 @@ export function registerTopologyTools(server: McpServer, session: Session) {
       title: "Add link",
       description:
         "Connect two device ports with a cable. Use Packet Tracer interface names; abbreviations are expanded " +
-        "(Gi0/0 -> GigabitEthernet0/0, Fa0/1 -> FastEthernet0/1, Se0/0/0 -> Serial0/0/0). Each port can belong to only one link. " +
+        "(Gi0/0 -> GigabitEthernet0/0, Fa0/1 -> FastEthernet0/1, Se0/0/0 -> Serial0/0/0). Each port can belong to only one link, " +
+        "and the two ends must be on different devices. " +
         `Onboard ports: ${PORTS}. Routers have no onboard serial ports and modules cannot be added yet, so connect routers over Ethernet. ` +
         "Omit `cable` to let the server infer it: straight between unlike devices (router/host <-> switch/hub), cross between like " +
         "devices (switch-switch, router-router, router-PC, PC-PC), straight from an access point to a switch/hub and cross to a " +
@@ -136,7 +156,7 @@ export function registerTopologyTools(server: McpServer, session: Session) {
       description:
         "Rename a device; its links, IOS commands and IP configuration follow. IOS `hostname` commands are not changed " +
         "(use configure_device with replace: true to update them).",
-      inputSchema: { name, new_name: z.string().min(1).describe("New unique device name.") },
+      inputSchema: { name, new_name: newName("New unique device name") },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     (a) =>
@@ -215,13 +235,17 @@ export function registerTopologyTools(server: McpServer, session: Session) {
         "changes and the error names the failing item. Same rules as add_device, add_link, configure_device and configure_pc " +
         "(models are resolved, ports normalized, cables inferred when omitted, IOS commands run in global configuration mode).",
       inputSchema: {
-        devices: z.array(z.object({ name, model, x: coord("X"), y: coord("Y") })).describe("Devices to create."),
-        links: z.array(z.object(linkFields)).default([]).describe("Links between device ports."),
+        devices: z
+          .array(z.object({ name: newName("Unique device name"), model, x: coord("X"), y: coord("Y") }))
+          .max(LIMITS.devices)
+          .describe(`Devices to create (at most ${LIMITS.devices}).`),
+        links: z.array(z.object(linkFields)).max(LIMITS.links).default([]).describe(`Links between device ports (at most ${LIMITS.links}).`),
         ios: z
           .array(z.object({ name, commands: iosCommands }))
+          .max(LIMITS.devices)
           .default([])
           .describe("IOS commands per router/switch (global configuration mode)."),
-        pcs: z.array(z.object(pcFields)).default([]).describe("Host IP configurations (as configure_pc)."),
+        pcs: z.array(z.object(pcFields)).max(LIMITS.devices).default([]).describe("Host IP configurations (as configure_pc)."),
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },

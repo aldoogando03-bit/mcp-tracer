@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  CATALOG, PTBUILDER_MODELS, findPort, formatPorts, getModelInfo, isIosModel, normalizePort, portKind, resolveModel, samePort,
-  suggestModels,
+  CATALOG, MAX_PORT_LENGTH, PTBUILDER_MODELS, findPort, formatPorts, getModelInfo, isIosModel, normalizePort, portKind, resolveModel,
+  samePort, suggestModels,
 } from "../src/catalog.js";
 
 describe("resolveModel", () => {
@@ -98,6 +98,12 @@ describe("suggestModels", () => {
     expect(suggestModels("PC", 3)).toHaveLength(3);
     expect(suggestModels("PC")[0]).toBe("PC-PT");
   });
+
+  it("stays fast on a huge input", () => {
+    const start = performance.now();
+    expect(suggestModels("x".repeat(1_000_000))).toHaveLength(5);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });
 
 describe("normalizePort", () => {
@@ -136,10 +142,38 @@ describe("normalizePort", () => {
     ["Vlan1", "Vlan1"],
     ["po1", "Port-channel1"],
     ["Port-channel1", "Port-channel1"],
-    ["foo 1", "foo1"],
+    ["Fa_0/1", "FastEthernet0/1"],
+    ["Fa - 0/1", "FastEthernet0/1"],
+    ["foo 1", "foo 1"],
+    [" foo-1 ", "foo-1"],
     ['weird "name"', 'weird "name"'],
   ])("normalizes %j to %j", (input, expected) => {
     expect(normalizePort(input)).toBe(expected);
+  });
+
+  it.each(["constructor 1", "__proto__ 1", "toString0", "hasOwnProperty", "valueOf 2"])(
+    "keeps %j as given: Object.prototype names are not prefixes",
+    (input) => {
+      expect(normalizePort(input)).toBe(input);
+    }
+  );
+
+  it("runs in linear time on adversarial input and returns over-long names unparsed", () => {
+    const inputs = [
+      `a${"-".repeat(20_000)}!`,
+      `a${"_".repeat(20_000)}1x`,
+      `Gi${" -".repeat(10_000)}0/0x`,
+      `a${"-".repeat(61)}!`, // at the length cap, so it still goes through the regex
+      `${"a-".repeat(31)}a!`,
+    ];
+    for (const input of inputs) {
+      const start = performance.now();
+      const out = normalizePort(input);
+      expect(performance.now() - start, `${input.length} chars`).toBeLessThan(50);
+      expect(out).toBe(input.trim());
+    }
+    expect(normalizePort(` gi0/0${" ".repeat(MAX_PORT_LENGTH)}`)).toBe("GigabitEthernet0/0");
+    expect(normalizePort(`gi${"0".repeat(MAX_PORT_LENGTH)}`)).toBe(`gi${"0".repeat(MAX_PORT_LENGTH)}`);
   });
 
   it("is idempotent on its own output", () => {
@@ -160,6 +194,9 @@ describe("port helpers", () => {
   it("findPort returns the catalog entry for any spelling", () => {
     const wrt = getModelInfo("Linksys-WRT300N");
     expect(findPort(wrt, "eth 2")?.name).toBe("Ethernet 2");
+    expect(findPort(wrt, "ethernet1")?.name).toBe("Ethernet 1");
+    expect(findPort(wrt, "INTERNET")?.name).toBe("Internet");
+    expect(findPort(getModelInfo("AccessPoint-PT"), "port0")?.name).toBe("Port 0");
     expect(findPort(getModelInfo("2911"), "gi0/2")).toEqual({ name: "GigabitEthernet0/2", kind: "gigabitethernet", verified: false });
     expect(findPort(getModelInfo("2911"), "Gi0/0")?.verified).toBe(true);
     expect(findPort(undefined, "Gi0/0")).toBeUndefined();

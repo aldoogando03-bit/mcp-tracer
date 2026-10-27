@@ -142,10 +142,14 @@ export function layoutPositions(t: Topology): Map<string, Position> {
   const sequence = [...auto].sort((a, b) => row.get(a)! - row.get(b)! || x.get(a)! - x.get(b)! || order.get(a)! - order.get(b)!);
   for (const n of sequence) {
     const p = { x: x.get(n)! + shift, y: rowY[row.get(n)!] };
-    for (;;) {
+    // Each step moves p strictly right of one taken device, so it can hit each one at most once. The cap and the
+    // progress check also stop the loop where float precision would not move p (coordinates far outside the limits).
+    for (let i = 0; i <= taken.length; i++) {
       const hit = taken.find((q) => Math.abs(q.x - p.x) < CLEARANCE && Math.abs(q.y - p.y) < CLEARANCE);
       if (!hit) break;
-      p.x = Math.ceil(hit.x) + CLEARANCE;
+      const next = Math.ceil(hit.x) + CLEARANCE;
+      if (!(next > p.x)) break;
+      p.x = next;
     }
     taken.push(p);
     out.set(n, p);

@@ -25,6 +25,7 @@ Initial public release.
 - Automatic layout for devices without coordinates, in rows: routers, multilayer switches, switches, hosts.
 - [docs/PTBUILDER_API.md](docs/PTBUILDER_API.md): PTBuilder API reference, with every unconfirmed item tagged "sin verificar".
 - Examples in `examples/` (small office with DHCP, VLANs with router-on-a-stick, OSPF with three routers) and `npm run examples` to regenerate their scripts.
+- `add_link` refuses a cable between two ports of the same device, and generated scripts configure hosts whose FastEthernet0 is verified (`PC-PT`, `Server-PT`) before the others, so a `configurePcIp` that fails on a `Laptop-PT` or `Printer-PT` can't skip them.
 
 ### Changed
 
@@ -43,6 +44,14 @@ These fixes are relative to the unreleased `packet-tracer-mcp` prototype.
 - Adding a device with an existing name is an error instead of silently replacing the first device.
 - Devices without coordinates are laid out automatically instead of all being placed at (100, 100).
 - U+2028 and U+2029 are escaped in emitted strings.
+
+### Security
+
+- File tools only accept their own extensions, case-insensitively: `.json` for `save_topology` and `load_topology`, `.js` or `.txt` for `export_script`. A tool call can never write a `.cmd`, `.bat` or other executable file. Paths that name a directory (`~`, `.`, `..`, a bare drive such as `C:`, an existing folder) or have `:` in the file name are refused.
+- Device names are restricted to 1-64 characters (letters, digits, spaces and `. _ ( ) / -`, starting with a letter or digit), and `__proto__`, `constructor` and `prototype` are refused.
+- Input size limits in the tool schemas, the topology file format and the model: 500 devices, 2000 links, 64-character model and port names, 32-character addresses, 2000 IOS commands of up to 512 characters per call and per device, 1024-character paths, and coordinates from -100000 to 100000.
+- Port name normalization runs in linear time, device and port lookups use indexes, and the automatic layout always terminates, so oversized input can't stall the server.
+- Lookups keyed by user input use `Map`s or own-key checks, so names such as `constructor` never resolve to `Object.prototype` members.
 
 [Unreleased]: https://github.com/aldoogando03-bit/mcp-tracer/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/aldoogando03-bit/mcp-tracer/releases/tag/v0.1.0

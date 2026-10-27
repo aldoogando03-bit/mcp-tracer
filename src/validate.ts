@@ -6,14 +6,15 @@ import {
   CABLE_NEEDS, UNVERIFIED_CABLES, cableFitsLink, expectedEthernetCable, inferCable, linkPortsCompatible, possiblePortKinds,
 } from "./cables.js";
 import {
-  PTBUILDER_MODELS, findPort, formatPorts, getModelInfo, isIosModel, normalizePort, suggestModels, type ModelInfo, type PortKind,
+  PTBUILDER_MODELS, findPort, formatPorts, getModelInfo, isIosModel, normalizePort, portKey, suggestModels, type ModelInfo,
+  type PortKind,
 } from "./catalog.js";
-import type { Link, Topology } from "./topology.js";
+import { intToIp, maskToPrefix, parseIpv4 } from "./ipv4.js";
+import { fmtLink, type Link, type Topology } from "./topology.js";
 
 export type Issue = { severity: "error" | "warning"; code: string; message: string; device?: string };
 
-const fmtLink = (l: Link) => `${l.dev1}:${l.port1} <-> ${l.dev2}:${l.port2}`;
-const portKey = (dev: string, port: string) => `${dev.toLowerCase()}:${normalizePort(port).toLowerCase().replace(/\s+/g, "")}`;
+const endKey = (dev: string, port: string) => `${dev.toLowerCase()}:${portKey(port)}`;
 const list = (items: string[]) => (items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
 
 const KIND_LABEL: Record<PortKind, string> = {
@@ -24,24 +25,11 @@ const KIND_LABEL: Record<PortKind, string> = {
 /** Catalogued model to suggest instead of an uncatalogued one of the same category. */
 const PREFERRED: Partial<Record<string, string>> = { router: "2911", switch: "2960-24TT", l3switch: "3560-24PS" };
 
-/** 32-bit value of a dotted-quad IPv4 address, or undefined. */
-function ipValue(s: string | undefined): number | undefined {
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s?.trim() ?? "");
-  if (!m) return undefined;
-  const o = m.slice(1).map(Number);
-  if (o.some((n) => n > 255)) return undefined;
-  return o.reduce((acc, n) => ((acc << 8) | n) >>> 0, 0);
-}
-
 /** Prefix length of a dotted subnet mask, or undefined when it isn't one. */
 function prefixLength(s: string | undefined): number | undefined {
-  const v = ipValue(s);
-  if (v === undefined) return undefined;
-  for (let n = 0; n <= 32; n++) if ((n === 0 ? 0 : (0xffffffff << (32 - n)) >>> 0) === v) return n;
-  return undefined;
+  const v = parseIpv4(s);
+  return v === undefined ? undefined : maskToPrefix(v);
 }
-
-const dotted = (v: number) => [24, 16, 8, 0].map((s) => (v >>> s) & 255).join(".");
 
 /** `ip address A M [secondary]` lines per interface (last primary wins, as in IOS). */
 function iosAddresses(commands: string[]): { ip: string; where: string }[] {
@@ -56,7 +44,7 @@ function iosAddresses(commands: string[]): { ip: string; where: string }[] {
       continue;
     }
     const m = /^ip address (\S+) (\S+)( secondary)?$/i.exec(line);
-    if (!m || ipValue(m[1]) === undefined) continue;
+    if (!m || parseIpv4(m[1]) === undefined) continue;
     if (m[3]) out.push({ ip: m[1], where: iface });
     else primary.set(iface, m[1]);
   }
@@ -123,7 +111,7 @@ export function validate(t: Topology): { errors: Issue[]; warnings: Issue[] } {
       continue;
     }
     for (const [dev, port] of ends) {
-      const k = portKey(dev, port);
+      const k = endKey(dev, port);
       const use = portUse.get(k) ?? { dev, port, links: [] };
       if (!use.links.includes(l)) use.links.push(l);
       portUse.set(k, use);
@@ -131,7 +119,7 @@ export function validate(t: Topology): { errors: Issue[]; warnings: Issue[] } {
     if (l.dev1 === l.dev2) {
       error(
         "SELF_LINK",
-        l.port1 === l.port2 || portKey(l.dev1, l.port1) === portKey(l.dev2, l.port2)
+        l.port1 === l.port2 || portKey(l.port1) === portKey(l.port2)
           ? `${fmtLink(l)} links a port to itself. Remove it with remove_link.`
           : `${fmtLink(l)} connects ${l.dev1} to itself. Packet Tracer refuses a cable between two ports of the same switch, ` +
               "and a link back to the same device is almost always a mistake. Link to another device.",
@@ -192,7 +180,8 @@ export function validate(t: Topology): { errors: Issue[]; warnings: Issue[] } {
     const omit = `Omit cable to let the server infer it (${inferred}).`;
     if (!cableFitsLink(l.cable, infoA, l.port1, infoB, l.port2)) {
       const kinds = `${KIND_LABEL[possiblePortKinds(infoA, l.port1)[0]]} and ${KIND_LABEL[possiblePortKinds(infoB, l.port2)[0]]}`;
-      error("CABLE_INCOMPATIBLE", `${fmtLink(l)}: a ${l.cable} cable cannot join ${kinds} ports; it needs ${CABLE_NEEDS[l.cable]} ports. ${omit}`, l.dev1);
+      const needs = Object.hasOwn(CABLE_NEEDS, l.cable) ? `it needs ${CABLE_NEEDS[l.cable]} ports` : "it is not a PTBuilder cable type";
+      error("CABLE_INCOMPATIBLE", `${fmtLink(l)}: a ${l.cable} cable cannot join ${kinds} ports; ${needs}. ${omit}`, l.dev1);
     } else if (UNVERIFIED_CABLES.has(l.cable)) {
       warn("CABLE_UNVERIFIED", `${fmtLink(l)}: the "${l.cable}" cable's behaviour through PTBuilder's addLink is unverified. ${omit}`, l.dev1);
     } else if (l.cable === "straight" || l.cable === "cross") {
@@ -283,7 +272,7 @@ export function validate(t: Topology): { errors: Issue[]; warnings: Issue[] } {
     const bad = (["ip", "mask", "gateway", "dns"] as const).filter((k) => {
       const v = pc[k];
       if (!v || (pc.dhcp && k !== "dns")) return false;
-      return k === "mask" ? prefixLength(v) === undefined : ipValue(v) === undefined;
+      return k === "mask" ? prefixLength(v) === undefined : parseIpv4(v) === undefined;
     });
     for (const k of bad) {
       error(
@@ -305,10 +294,10 @@ export function validate(t: Topology): { errors: Issue[]; warnings: Issue[] } {
     }
     if (bad.includes("ip") || bad.includes("mask")) continue;
     addresses.push({ ip: pc.ip, who: name, device: name });
-    const ip = ipValue(pc.ip)!;
+    const ip = parseIpv4(pc.ip)!;
     const prefix = prefixLength(pc.mask)!;
-    const mask = ipValue(pc.mask)!;
-    const subnet = `${dotted((ip & mask) >>> 0)}/${prefix}`;
+    const mask = parseIpv4(pc.mask)!;
+    const subnet = `${intToIp((ip & mask) >>> 0)}/${prefix}`;
     if (!pc.gateway) {
       warn(
         "HOST_STATIC_NO_GATEWAY",
@@ -316,7 +305,7 @@ export function validate(t: Topology): { errors: Issue[]; warnings: Issue[] } {
           "Add a gateway with configure_pc if it must reach other networks.",
         name
       );
-    } else if (!bad.includes("gateway") && ((ipValue(pc.gateway)! & mask) >>> 0) !== ((ip & mask) >>> 0)) {
+    } else if (!bad.includes("gateway") && ((parseIpv4(pc.gateway)! & mask) >>> 0) !== ((ip & mask) >>> 0)) {
       warn(
         "GATEWAY_NOT_IN_SUBNET",
         `${name}: gateway ${pc.gateway} is outside its subnet ${subnet} (${pc.ip} ${pc.mask}), so the host cannot reach it. ` +

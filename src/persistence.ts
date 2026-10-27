@@ -2,11 +2,12 @@
  * Topology files and user path handling for save_topology, load_topology and export_script. No MCP imports.
  * File format: { format, formatVersion, generator, savedAt, topology: Topology.toJSON() }.
  */
+import { statSync } from "node:fs";
 import { mkdir, open, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
-import { Topology } from "./topology.js";
+import { LIMITS, Topology } from "./topology.js";
 import { VERSION } from "./version.js";
 
 export const FILE_FORMAT = "mcp-tracer/topology";
@@ -31,14 +32,35 @@ export function baseDir(): string {
   return env ? path.resolve(expandHome(env)) : process.cwd();
 }
 
-/** Absolute path for user input: `~` expanded, relative paths resolved against baseDir(), `ext` added if the name has none. */
-export function resolveUserPath(input: string, ext: string): string {
+/**
+ * Absolute path for user input: `~` expanded, relative paths resolved against baseDir(), `ext` added if the name has
+ * none. Only the extensions in `allowed` are accepted (case-insensitive), so the file tools can never write a
+ * .cmd, .bat or other executable file. Names that denote a directory (~, ., .., C:, an existing folder) are refused.
+ */
+export function resolveUserPath(input: string, ext: string, allowed: readonly string[] = [ext]): string {
   const p = input.trim();
   if (!p) throw new Error("Path must not be empty.");
+  if (p.length > LIMITS.path) throw new Error(`Path is too long (at most ${LIMITS.path} characters).`);
   if (p.includes("\0")) throw new Error("Path must not contain NUL characters.");
   if (/[\\/]$/.test(p)) throw new Error(`"${input}" ends with a path separator; give a file name.`);
+  const last = p.split(/[\\/]/).pop()!;
+  if (["~", ".", ".."].includes(last) || /^[a-z]:$/i.test(last)) {
+    throw new Error(`"${input}" names a directory, not a file; give a file name such as lab${ext}.`);
+  }
+  if (last.includes(":")) throw new Error(`"${input}": the file name must not contain ":".`);
   const abs = path.resolve(baseDir(), expandHome(p));
-  return path.extname(abs) ? abs : abs + ext;
+  if (statSync(abs, { throwIfNoEntry: false })?.isDirectory()) {
+    throw new Error(`${abs} is a directory; give a file name inside it, e.g. ${path.join(abs, `lab${ext}`)}.`);
+  }
+  const e = path.extname(abs);
+  if (!e) return abs + ext;
+  if (!allowed.includes(e.toLowerCase())) {
+    throw new Error(
+      `${abs} has the extension "${e}", but only ${allowed.join(" and ")} files are allowed here. ` +
+        `Use ${allowed.length > 1 ? "one of those" : `a ${ext} name`}, or leave the extension out to get ${ext}.`
+    );
+  }
+  return abs;
 }
 
 /** Turns a Node fs error into a message that names the absolute path. Non-fs errors pass through. */
@@ -113,7 +135,7 @@ function rebuild(data: unknown): Topology {
 export function parseTopologyFile(content: string): LoadedFile {
   let data: unknown;
   try {
-    data = JSON.parse(content.replace(/^﻿/, ""));
+    data = JSON.parse(content.replace(/^\uFEFF/, ""));
   } catch (e) {
     throw new Error(`Not valid JSON: ${(e as Error).message}`);
   }

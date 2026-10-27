@@ -15,6 +15,10 @@ let dir: string;
 let cleanup: () => Promise<void>;
 let restoreEnv: () => void;
 
+/** A saved file holding one 2911 router with this name (and optional coordinates). */
+const forgedDevice = (name: string, x?: number) =>
+  JSON.stringify({ format: FILE_FORMAT, formatVersion: 1, topology: { devices: [{ name, model: "2911", ...(x === undefined ? {} : { x, y: 0 }) }] } });
+
 beforeEach(async () => {
   ({ dir, cleanup } = await makeTempDir());
   restoreEnv = setTracerDir(dir);
@@ -37,13 +41,28 @@ describe("path resolution", () => {
 
   it("adds the default extension only when the name has none", () => {
     expect(resolveUserPath("lab", ".json")).toBe(path.join(dir, "lab.json"));
-    expect(resolveUserPath("lab.txt", ".json")).toBe(path.join(dir, "lab.txt"));
+    expect(resolveUserPath("lab.json", ".json")).toBe(path.join(dir, "lab.json"));
     expect(resolveUserPath("script", ".js")).toBe(path.join(dir, "script.js"));
     expect(resolveUserPath(path.join(dir, "abs"), ".js")).toBe(path.join(dir, "abs.js"));
   });
 
+  it("accepts only the allowed extensions, case-insensitively", () => {
+    expect(resolveUserPath("lab.JSON", ".json")).toBe(path.join(dir, "lab.JSON"));
+    expect(resolveUserPath("out.TXT", ".js", [".js", ".txt"])).toBe(path.join(dir, "out.TXT"));
+    expect(resolveUserPath("out.js", ".js", [".js", ".txt"])).toBe(path.join(dir, "out.js"));
+    for (const name of ["evil.cmd", "evil.bat", "evil.ps1", "lab.txt", "lab.v2", "evil.json.cmd", "evil.cmd."]) {
+      expect(() => resolveUserPath(name, ".json"), name).toThrow(/but only \.json files are allowed here/);
+    }
+    for (const name of ["evil.cmd", "evil.BAT", "evil.vbs", "lab.json", "x.js.exe"]) {
+      expect(() => resolveUserPath(name, ".js", [".js", ".txt"]), name).toThrow(/only \.js and \.txt files are allowed here/);
+    }
+    // An NTFS alternate data stream ("x.cmd:s.json") would get past an extension check, so ":" is refused.
+    expect(() => resolveUserPath("evil.cmd:s.json", ".json")).toThrow(/must not contain ":"/);
+  });
+
   it("expands ~ to the home directory", () => {
     expect(resolveUserPath("~/labs/a.json", ".json")).toBe(path.join(homedir(), "labs", "a.json"));
+    expect(resolveUserPath("~\\b.json", ".json")).toBe(path.join(homedir(), "b.json"));
     setTracerDir("~");
     expect(baseDir()).toBe(path.resolve(homedir()));
   });
@@ -53,8 +72,22 @@ describe("path resolution", () => {
     ["   ", /must not be empty/],
     ["a\0b", /NUL/],
     ["labs/", /ends with a path separator/],
+    ["~", /names a directory, not a file/],
+    [".", /names a directory, not a file/],
+    ["..", /names a directory, not a file/],
+    ["labs/..", /names a directory, not a file/],
+    ["C:", /names a directory, not a file/],
+    ["x".repeat(1025), /too long/],
   ])("rejects %j", (input, message) => {
     expect(() => resolveUserPath(input, ".json")).toThrow(message);
+  });
+
+  it("rejects a path that is an existing directory instead of writing next to it", async () => {
+    await mkdir(path.join(dir, "labs"));
+    await mkdir(path.join(dir, "odd.json"));
+    expect(() => resolveUserPath("labs", ".json")).toThrow(`${path.join(dir, "labs")} is a directory; give a file name inside it`);
+    expect(() => resolveUserPath(path.join(dir, "odd.json"), ".json")).toThrow(/is a directory/);
+    expect(resolveUserPath("labs/lab", ".json")).toBe(path.join(dir, "labs", "lab.json"));
   });
 });
 
@@ -117,6 +150,20 @@ describe("serializeTopology / parseTopologyFile", () => {
       ],
     };
     expect(() => parseTopologyFile(forged(reusedPort))).toThrow(/is already used/);
+  });
+
+  it("rejects a forged __proto__ device, whose IOS config could not survive a save/load round trip", () => {
+    const text = `{"format":"${FILE_FORMAT}","formatVersion":1,"topology":{"devices":[{"name":"__proto__","model":"2911"}],` +
+      `"configs":{"__proto__":["hostname X"]}}}`;
+    expect(() => parseTopologyFile(text)).toThrow(/^Invalid topology in file: devices\[0\] "__proto__": Invalid device name/);
+    const ctor = forgedDevice("Constructor");
+    expect(() => parseTopologyFile(ctor)).toThrow(/"Constructor" is a reserved name/);
+  });
+
+  it("rejects files over the size limits of the tools", () => {
+    const devices = Array.from({ length: 501 }, (_, i) => ({ name: `PC${i}`, model: "PC-PT" }));
+    expect(() => parseTopologyFile(JSON.stringify({ devices }))).toThrow(/Invalid topology data[\s\S]*devices/);
+    expect(() => parseTopologyFile(forgedDevice("R1", 100_001))).toThrow(/Invalid topology data/);
   });
 });
 

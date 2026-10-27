@@ -3,8 +3,9 @@
  * strips every newline before running, so never emit `//` and end every statement with `;`.
  */
 import { resolveCable } from "./cables.js";
+import { findPort, getModelInfo } from "./catalog.js";
 import { layoutPositions } from "./layout.js";
-import type { Topology } from "./topology.js";
+import type { PcIp, Topology } from "./topology.js";
 import { VERSION } from "./version.js";
 
 /**
@@ -38,7 +39,14 @@ export function generatePTBuilderScript(t: Topology): string {
   for (const [name, cmds] of t.configs) {
     if (cmds.length) out.push(`configureIosDevice(${q(name)}, ${q(cmds.join("\n"))});`);
   }
-  for (const p of t.pcIps.values()) {
+  // Hosts whose FastEthernet0 is verified (PC-PT, Server-PT) first: a configurePcIp that throws on an unverified
+  // model (Laptop-PT, Printer-PT...) aborts the rest of the script, so it must not skip the verified ones.
+  const verified = (p: PcIp) => {
+    const d = t.devices.get(p.name);
+    return !!d && findPort(getModelInfo(d.model), "FastEthernet0")?.verified === true;
+  };
+  const pcs = [...t.pcIps.values()];
+  for (const p of [...pcs.filter(verified), ...pcs.filter((p) => !verified(p))]) {
     if (p.dhcp) {
       out.push(p.dns ? `configurePcIp(${q(p.name)}, true, "", "", "", ${q(p.dns)});` : `configurePcIp(${q(p.name)}, true);`);
     } else {

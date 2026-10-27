@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Topology, sanitizeIos, type TopologySpec } from "../src/topology.js";
+import { LIMITS, Topology, sanitizeIos, type TopologySpec } from "../src/topology.js";
 
 /** R1 (2911), S1 (2960-24TT), PC1 (PC-PT). */
 function base(): Topology {
@@ -52,6 +52,43 @@ describe("addDevice", () => {
     expect(() => t.addDevice({ name: "R1", model: "2911", x: Infinity, y: 1 })).toThrow(/finite/);
     expect(t.devices.size).toBe(0);
   });
+
+  it("accepts coordinates in -100000..100000 only", () => {
+    const t = new Topology();
+    expect(t.addDevice({ name: "A", model: "PC-PT", x: -LIMITS.coord, y: LIMITS.coord })).toMatchObject({ x: -100000, y: 100000 });
+    expect(() => t.addDevice({ name: "B", model: "PC-PT", x: 6e17, y: 100 })).toThrow(/Coordinates must be between -100000 and 100000, got 600000000000000000/);
+    expect(() => t.addDevice({ name: "B", model: "PC-PT", x: 0, y: -100000.5 })).toThrow(/between -100000 and 100000/);
+    expect(t.devices.size).toBe(1);
+  });
+
+  it.each([
+    "R1", "Core SW (1)", "edge-router.lab_2/A", "9", "x".repeat(64),
+  ])("accepts the device name %j", (name) => {
+    expect(new Topology().addDevice({ name, model: "2911" }).name).toBe(name);
+  });
+
+  it.each([
+    'R"1', "a*b", "-R1", "_R1", "(R1)", "R1;", "R1\nR2", "PC x", "R&1", "R1:", "x".repeat(65), "__proto__",
+  ])("rejects the device name %j with the rule", (name) => {
+    expect(() => new Topology().addDevice({ name, model: "2911" })).toThrow(
+      /^Invalid device name ".*": use 1-64 characters: letters, digits, spaces and \. _ \( \) \/ -, starting with a letter or digit/s
+    );
+  });
+
+  it.each(["constructor", "Prototype", "CONSTRUCTOR"])("rejects the reserved name %j", (name) => {
+    const t = new Topology();
+    expect(() => t.addDevice({ name, model: "2911" })).toThrow(`"${name}" is a reserved name`);
+    t.addDevice({ name: "R1", model: "2911" });
+    expect(() => t.renameDevice("R1", name)).toThrow(/is a reserved name/);
+    expect(() => Topology.fromJSON({ devices: [{ name, model: "2911" }] })).toThrow(/is a reserved name/);
+  });
+
+  it("caps the model length and the device count", () => {
+    const t = new Topology();
+    expect(() => t.addDevice({ name: "R1", model: "2".repeat(65) })).toThrow(/too long \(at most 64 characters\)/);
+    for (let i = 0; i < LIMITS.devices; i++) t.devices.set(`D${i}`, { name: `D${i}`, model: "PC-PT" });
+    expect(() => t.addDevice({ name: "R1", model: "2911" })).toThrow(/already has 500 devices, the maximum/);
+  });
 });
 
 describe("addLink", () => {
@@ -83,6 +120,38 @@ describe("addLink", () => {
     const t = base();
     expect(() => t.addLink({ dev1: "R1", port1: "Gi0/0", dev2: "r1", port2: "GigabitEthernet0/0" })).toThrow(/to itself/);
     expect(t.links).toHaveLength(0);
+  });
+
+  it("rejects linking two ports of the same device, whatever the case of its name", () => {
+    const t = base();
+    expect(() => t.addLink({ dev1: "S1", port1: "Fa0/1", dev2: "s1", port2: "Fa0/2" })).toThrow(
+      "Cannot link S1:FastEthernet0/1 to S1:FastEthernet0/2: both ends are on S1, and Packet Tracer refuses a cable between two ports of the same device."
+    );
+    expect(() => Topology.fromJSON({ devices: [{ name: "S1", model: "2960-24TT" }], links: [{ dev1: "S1", port1: "Fa0/1", dev2: "S1", port2: "Fa0/2" }] })).toThrow(/both ends are on S1/);
+    expect(t.links).toHaveLength(0);
+  });
+
+  it("caps port name length, after expansion", () => {
+    const t = new Topology();
+    t.addDevice({ name: "H1", model: "Hub-PT" });
+    t.addDevice({ name: "H2", model: "Hub-PT" });
+    const ok = `p${"x".repeat(63)}`;
+    expect(t.addLink({ dev1: "H1", port1: ok, dev2: "H2", port2: "Port 1" }).port1).toBe(ok);
+    expect(() => t.addLink({ dev1: "H1", port1: `p${"x".repeat(64)}`, dev2: "H2", port2: "Port 2" })).toThrow(/too long \(at most 64 characters\)/);
+    // 64 characters as typed, but "g" expands to GigabitEthernet.
+    expect(() => t.addLink({ dev1: "H1", port1: `g${"0".repeat(63)}`, dev2: "H2", port2: "Port 2" })).toThrow(/too long/);
+    expect(t.links).toHaveLength(1);
+  });
+
+  it("caps the link count, and finds used ports through an index (2000 links stay fast)", () => {
+    const t = new Topology();
+    t.addDevice({ name: "H1", model: "Hub-PT" });
+    t.addDevice({ name: "H2", model: "Hub-PT" });
+    const start = performance.now();
+    for (let i = 0; i < LIMITS.links; i++) t.addLink({ dev1: "H1", port1: `Port ${i}`, dev2: "h2", port2: `port${i}` });
+    expect(performance.now() - start).toBeLessThan(2000);
+    expect(t.findLink("h2", "PORT 1999")).toBe(t.links[1999]);
+    expect(() => t.addLink({ dev1: "H1", port1: "Port 5000", dev2: "H2", port2: "Port 5000" })).toThrow(/already has 2000 links, the maximum/);
   });
 
   it("rejects reusing a port, however it is spelled", () => {
@@ -179,6 +248,8 @@ describe("renameDevice", () => {
     expect([...t.devices.keys()]).toEqual(["r1", "S1", "PC1"]);
     expect(() => t.renameDevice("r1", "s1")).toThrow(/A device named "S1" already exists/);
     expect(() => t.renameDevice("r1", " ")).toThrow(/must not be empty/);
+    expect(() => t.renameDevice("r1", "R*1")).toThrow(/^Invalid device name "R\*1": use 1-64 characters/);
+    expect(() => t.renameDevice("r1", "__proto__")).toThrow(/Invalid device name/);
     expect(() => t.renameDevice("nope", "x")).toThrow(/Unknown device "nope"/);
   });
 });
@@ -216,6 +287,17 @@ describe("configureIos", () => {
     expect(r.dropped).toEqual(["enable", "conf t", "end", "wr mem"]);
     expect(() => t.configureIos({ name: "S1", commands: ["enable", "  ", "end"] })).toThrow(/No IOS commands left to add for S1 \(dropped: enable \| end\)/);
     expect(t.configs.has("S1")).toBe(false);
+  });
+
+  it("caps line length, lines per call and lines per device", () => {
+    const t = base();
+    expect(() => t.configureIos({ name: "R1", commands: ["hostname R1", "x".repeat(513)] })).toThrow(/IOS command 2 for R1 is longer than 512 characters/);
+    expect(() => t.configureIos({ name: "R1", commands: Array(2001).fill("ip routing") })).toThrow(/Too many IOS commands for R1: 2001 \(at most 2000 per call\)/);
+    expect(t.configureIos({ name: "R1", commands: Array(1500).fill("ip routing") }).total).toBe(1500);
+    expect(() => t.configureIos({ name: "R1", commands: Array(501).fill("ip routing") })).toThrow(/R1 would have 2001 IOS commands; the limit is 2000 per device/);
+    // A line split on embedded newlines counts once per resulting command.
+    expect(() => t.configureIos({ name: "R1", commands: Array(300).fill("a\nb") })).toThrow(/would have 2100/);
+    expect(t.configureIos({ name: "R1", commands: ["hostname R1"], replace: true }).total).toBe(1);
   });
 });
 
@@ -427,6 +509,14 @@ describe("toJSON / fromJSON", () => {
     [{ devices: [{ name: "R1", model: "2911" }], links: [{ dev1: "R1", port1: "Gi0/9", dev2: "R1", port2: "Gi0/0" }] }, /has no port/],
     [{ devices: [{ name: "PC1", model: "PC-PT" }], configs: { PC1: ["hostname x"] } }, /does not run IOS/],
     [{ devices: [{ name: "R1", model: "2911" }], pcIps: [{ name: "R1", dhcp: true }] }, /is not a host/],
+    [{ devices: [{ name: "R1", model: "2911", x: 100_001, y: 0 }] }, /Invalid topology data/],
+    [{ devices: [{ name: "x".repeat(65), model: "2911" }] }, /Invalid topology data/],
+    [{ devices: [{ name: "a*b", model: "2911" }] }, /devices\[0\] "a\*b": Invalid device name/],
+    [{ devices: [], links: [{ dev1: "a", port1: "p".repeat(65), dev2: "c", port2: "d" }] }, /Invalid topology data/],
+    [{ devices: [{ name: "R1", model: "2911" }], configs: { R1: ["x".repeat(513)] } }, /Invalid topology data/],
+    [{ devices: [{ name: "R1", model: "2911" }], configs: { R1: Array(2001).fill("x") } }, /Invalid topology data/],
+    [{ devices: [], pcIps: [{ name: "PC1", dhcp: false, ip: "1".repeat(33) }] }, /Invalid topology data/],
+    [{ devices: Array.from({ length: 501 }, (_, i) => ({ name: `D${i}`, model: "PC-PT" })) }, /Invalid topology data/],
   ])("rejects invalid data (%#)", (data, message) => {
     expect(() => Topology.fromJSON(data)).toThrow(message);
   });
@@ -441,6 +531,38 @@ describe("lookups and reset", () => {
     expect(t.findLink("S1", "g0/1")).toBe(t.links[0]);
     expect(t.findLink("S1", "Gi0/2")).toBeUndefined();
     expect(t.findLink("nope", "Gi0/1")).toBeUndefined();
+  });
+
+  it("keeps the name and port indexes in step with renames, removals and direct edits", () => {
+    const t = base();
+    t.addLink({ dev1: "R1", port1: "Gi0/0", dev2: "S1", port2: "Gi0/1" });
+    t.renameDevice("s1", "Core");
+    expect(t.getDevice("s1")).toBeUndefined();
+    expect(t.getDevice("CORE")?.name).toBe("Core");
+    expect(t.findLink("core", "gi0/1")).toBe(t.links[0]);
+    expect(t.findLink("S1", "gi0/1")).toBeUndefined();
+    t.renameDevice("Core", "core");
+    expect(t.getDevice("CORE")?.name).toBe("core");
+
+    t.removeLink("R1", "Gi0/0");
+    expect(t.findLink("core", "gi0/1")).toBeUndefined();
+    t.addLink({ dev1: "PC1", port1: "Fa0", dev2: "core", port2: "Gi0/1" });
+    t.removeDevice("pc1");
+    expect(t.getDevice("PC1")).toBeUndefined();
+    expect(t.findLink("core", "Gi0/1")).toBeUndefined();
+
+    // Direct edits, as validate tests do: a replaced or longer links array is re-indexed.
+    t.devices.set("Edge", { name: "Edge", model: "2911" });
+    expect(t.getDevice("edge")?.name).toBe("Edge");
+    t.links.push({ dev1: "Edge", port1: "GigabitEthernet0/2", dev2: "core", port2: "GigabitEthernet0/2" });
+    expect(t.findLink("EDGE", "gi0/2")).toBe(t.links[0]);
+    t.links = [];
+    expect(t.findLink("EDGE", "gi0/2")).toBeUndefined();
+
+    // Two names that differ only in case (hand-built state): deleting one keeps the other findable.
+    t.devices.set("edge", { name: "edge", model: "2911" });
+    t.devices.delete("edge");
+    expect(t.getDevice("EDGE")?.name).toBe("Edge");
   });
 
   it("reset clears everything", () => {

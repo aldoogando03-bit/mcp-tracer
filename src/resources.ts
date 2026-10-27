@@ -1,5 +1,5 @@
 import { ResourceTemplate, type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
+import { ErrorCode, McpError, type ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import { CABLE_TYPES } from "./cables.js";
 import { CATALOG, PTBUILDER_MODELS, getModelInfo, resolveModel, suggestModels, type ModelInfo } from "./catalog.js";
 import { compactJson } from "./render.js";
@@ -99,7 +99,13 @@ export function registerResources(server: McpServer): void {
         /* keep the raw value */
       }
       const r = input.trim() ? resolveModel(input) : undefined;
-      if (!r) throw new Error(`Unknown model "${input}". Closest PTBuilder model keys: ${suggestModels(input).join(", ")}.`);
+      if (!r) {
+        // The SDK has no "resource not found" code (-32002); it uses InvalidParams for unknown resources too.
+        const shown = input.length > 80 ? `${input.slice(0, 64)}...` : input;
+        throw new McpError(ErrorCode.InvalidParams, `Unknown model "${shown}". Closest PTBuilder model keys: ${suggestModels(input).join(", ")}.`, {
+          uri: uri.href,
+        });
+      }
       const resolvedFrom = r.model !== input ? { resolvedFrom: input } : {};
       if (r.info) return json(uri, { ...header(), ...resolvedFrom, ...entry(r.info) });
       const info = getModelInfo(r.model);

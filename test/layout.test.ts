@@ -178,6 +178,21 @@ describe("layoutPositions", () => {
     expect(rowsOf(rotated)).toEqual(expected);
   });
 
+  it("terminates on coordinates too large for float steps (the mutators reject them; hand-built states may hold them)", () => {
+    const t = new Topology();
+    expect(() => t.addDevice({ name: "S1", model: "2960-24TT", x: 6e17, y: 100 })).toThrow(/between -100000 and 100000/);
+    // A switch and a PC at x = 6e17, plus an auto-placed PC linked to the switch: its nudge used to loop forever
+    // because Math.ceil(6e17) + 60 === 6e17.
+    t.devices.set("S1", { name: "S1", model: "2960-24TT", x: 6e17, y: 100 });
+    t.devices.set("PC1", { name: "PC1", model: "PC-PT", x: 6e17, y: 250 });
+    t.devices.set("PC2", { name: "PC2", model: "PC-PT" });
+    t.links.push({ dev1: "PC2", port1: "FastEthernet0", dev2: "S1", port2: "FastEthernet0/1" });
+    const start = performance.now();
+    const pos = layoutPositions(t);
+    expect(performance.now() - start).toBeLessThan(500);
+    expect(pos.get("PC2")).toEqual({ x: 6e17, y: 250 });
+  });
+
   it("ignores links to missing devices and self-links", () => {
     const t = build([{ name: "S1", model: "2960-24TT" }, { name: "PC1", model: "PC-PT" }]);
     t.links.push({ dev1: "S1", port1: "FastEthernet0/1", dev2: "S1", port2: "FastEthernet0/2" });

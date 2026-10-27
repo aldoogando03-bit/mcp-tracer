@@ -4,9 +4,13 @@ import { z } from "zod";
 import { MAX_FILE_BYTES, baseDir, parseTopologyFile, readTextFile, resolveUserPath, serializeTopology, writeTextFile } from "../persistence.js";
 import { issueReport, plural, renderScript } from "../render.js";
 import type { Session } from "../session.js";
-import type { Topology } from "../topology.js";
+import { LIMITS, type Topology } from "../topology.js";
 import { formatValidation, validate } from "../validate.js";
 import { fail, text } from "./util.js";
+
+/** Extensions each file tool accepts (the first one is added when the name has none). */
+const TOPOLOGY_EXTS = [".json"];
+const SCRIPT_EXTS = [".js", ".txt"];
 
 /** Async counterpart of util.safe(): a returned string becomes a text result, a thrown Error becomes fail(message). */
 async function safeAsync(fn: () => Promise<string | CallToolResult>): Promise<CallToolResult> {
@@ -22,8 +26,15 @@ const where = () =>
   `Use an absolute path: relative paths resolve against $MCP_TRACER_DIR if set, else the server's working directory ` +
   `(now ${baseDir()}), which MCP clients often set arbitrarily. "~" is the user's home directory.`;
 
-const filePath = (what: string, ext: string) =>
-  z.string().min(1).describe(`${what} ${ext} is added when the file name has no extension. Absolute path recommended.`);
+const filePath = (what: string, exts: string[]) =>
+  z
+    .string()
+    .min(1)
+    .max(LIMITS.path)
+    .describe(
+      `${what} Only ${exts.join(" or ")} file names are accepted; ${exts[0]} is added when the file name has no extension. ` +
+        "Absolute path recommended."
+    );
 const overwrite = z.boolean().default(false).describe("true = replace the file if it already exists.");
 
 const counts = (t: Topology) =>
@@ -40,13 +51,13 @@ export function registerFileTools(server: McpServer, session: Session): void {
         "Save the current topology (devices, links, IOS commands, host IP configurations) to a JSON file that load_topology " +
         `can read back. ${paths} Missing folders are created. Refuses to replace an existing file unless overwrite: true. ` +
         "The result shows the absolute path written.",
-      inputSchema: { path: filePath("File to write, e.g. C:\\labs\\vlans.json or /home/me/labs/vlans.json.", ".json"), overwrite },
+      inputSchema: { path: filePath("File to write, e.g. C:\\labs\\vlans.json or /home/me/labs/vlans.json.", TOPOLOGY_EXTS), overwrite },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },
     (a) =>
       safeAsync(async () => {
         const t = session.topology;
-        const abs = resolveUserPath(a.path, ".json");
+        const abs = resolveUserPath(a.path, ".json", TOPOLOGY_EXTS);
         await writeTextFile(abs, serializeTopology(t), a.overwrite);
         return `Saved ${counts(t)} to ${abs}${t.devices.size ? "" : " (the topology is empty)"}.`;
       })
@@ -60,12 +71,12 @@ export function registerFileTools(server: McpServer, session: Session): void {
         "Replace the current topology with one read from a file written by save_topology (a bare get_topology JSON object " +
         `is accepted too). ${paths} Atomic: the file is fully parsed and validated (models, ports, links, IOS and host IP ` +
         `rules) before anything changes; on any error the current topology is kept. Max ${MAX_FILE_BYTES / 1048576} MB.`,
-      inputSchema: { path: filePath("File to read.", ".json") },
+      inputSchema: { path: filePath("File to read.", TOPOLOGY_EXTS) },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
     (a) =>
       safeAsync(async () => {
-        const abs = resolveUserPath(a.path, ".json");
+        const abs = resolveUserPath(a.path, ".json", TOPOLOGY_EXTS);
         let loaded;
         try {
           loaded = parseTopologyFile(await readTextFile(abs));
@@ -91,7 +102,7 @@ export function registerFileTools(server: McpServer, session: Session): void {
         "existing file unless overwrite: true. The user then copies the whole file into Extensions > Builder Code Editor in a " +
         "new, empty Packet Tracer workspace and clicks Run.",
       inputSchema: {
-        path: filePath("File to write, e.g. C:\\labs\\vlans.js.", ".js"),
+        path: filePath("File to write, e.g. C:\\labs\\vlans.js.", SCRIPT_EXTS),
         overwrite,
         force: z.boolean().default(false).describe("Export even if validation reports errors."),
       },
@@ -99,8 +110,8 @@ export function registerFileTools(server: McpServer, session: Session): void {
     },
     (a) =>
       safeAsync(async () => {
+        const abs = resolveUserPath(a.path, ".js", SCRIPT_EXTS);
         const r = renderScript(session.topology, { force: a.force });
-        const abs = resolveUserPath(a.path, ".js");
         await writeTextFile(abs, `${r.script}\n`, a.overwrite);
         const lines = [
           `Wrote the PTBuilder script (${plural(r.script.split("\n").length, "line")}) to ${abs}.`,

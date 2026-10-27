@@ -139,6 +139,8 @@ Use the same `mcpServers` JSON in `.cursor/mcp.json` in your project, or in `~/.
 
 `save_topology`, `load_topology` and `export_script` resolve relative paths against `MCP_TRACER_DIR` if it is set, and otherwise against the server's working directory, which MCP clients often set to something arbitrary. A leading `~` means your home directory. Absolute paths always work.
 
+The file tools only accept their own extensions, case-insensitively: `.json` for `save_topology` and `load_topology`, `.js` or `.txt` for `export_script`. Anything else, such as `.cmd` or `.bat`, is refused, so a tool call can never write an executable file. A path that names a directory (`~`, `.`, `..`, a bare drive such as `C:`, or an existing folder) or contains `:` in the file name is refused too. Paths are not confined to `MCP_TRACER_DIR`; restricting them to it is a possible future option.
+
 ```json
 {
   "mcpServers": {
@@ -172,7 +174,9 @@ If a client fails to start the server (for example `spawn npx ENOENT`), run `npx
 
 ### Tools
 
-Device names are case-insensitive and must be unique. Port names can be abbreviated (`Gi0/0` becomes `GigabitEthernet0/0`, `Fa0/1` becomes `FastEthernet0/1`). Arguments marked `?` are optional.
+Device names are case-insensitive and must be unique. A name has 1 to 64 characters: letters, digits, spaces and `. _ ( ) / -`, starting with a letter or digit (`R1`, `Core SW (1)`); `constructor` and `prototype` are reserved. Port names can be abbreviated (`Gi0/0` becomes `GigabitEthernet0/0`, `Fa0/1` becomes `FastEthernet0/1`). Coordinates (`x`, `y`) go from -100000 to 100000. Arguments marked `?` are optional.
+
+Inputs have size limits: 500 devices and 2000 links per topology, 64 characters for model and port names, 32 for addresses and masks, and up to 2000 IOS commands of 512 characters each per call and per device.
 
 | Tool | What it does | Arguments |
 |---|---|---|
@@ -188,9 +192,9 @@ Device names are case-insensitive and must be unique. Port names can be abbrevia
 | `validate_config` | Report errors and warnings, each with a stable code and a fix. | none |
 | `generate_script` | Return the PTBuilder script, plus a second text block with any warnings. Validation errors block it. | `force?` (default `false`) |
 | `reset_topology` | Delete every device, link and configuration. | none |
-| `save_topology` | Save the topology to a JSON file that `load_topology` reads back. Adds `.json` when the name has no extension and creates missing folders. | `path`, `overwrite?` (default `false`) |
-| `load_topology` | Replace the topology with one from a file written by `save_topology` (a bare `get_topology` object also works). Fully validated before anything changes. 5 MB maximum. | `path` |
-| `export_script` | Write the PTBuilder script to a file (adds `.js` when the name has no extension). Same validation as `generate_script`. | `path`, `overwrite?` (default `false`), `force?` (default `false`) |
+| `save_topology` | Save the topology to a `.json` file that `load_topology` reads back. Adds `.json` when the name has no extension and creates missing folders. | `path`, `overwrite?` (default `false`) |
+| `load_topology` | Replace the topology with one from a `.json` file written by `save_topology` (a bare `get_topology` object also works). Fully validated before anything changes. 5 MB maximum. | `path` |
+| `export_script` | Write the PTBuilder script to a `.js` or `.txt` file (adds `.js` when the name has no extension). Same validation as `generate_script`. | `path`, `overwrite?` (default `false`), `force?` (default `false`) |
 
 **Cables** (`cable`): `straight`, `cross`, `roll`, `fiber`, `serial`, `console`, `phone`, `coaxial`, `auto`, `octal`, `usb`, `custom_io`. Leave it out and the server picks one: `straight` between unlike devices (router or host to switch or hub), `cross` between like devices (switch to switch, router to router, router to PC, PC to PC), `straight` from an access point to a switch or hub and `cross` to a router or host, `serial` for Serial ports and `console` for Console/RS232 ports. `auto`, `roll`, `octal`, `usb` and `custom_io` are passed to PTBuilder as given, and their behaviour there is unverified.
 
@@ -335,7 +339,7 @@ Most mistakes are rejected when the tool is called. `validate_config` is the fin
 |---|---|
 | `UNKNOWN_MODEL` | The model is not a key of PTBuilder's device table. |
 | `UNKNOWN_DEVICE` | A link, IOS block or IP configuration names a device that doesn't exist. |
-| `SELF_LINK` | A link goes from a device back to itself. |
+| `SELF_LINK` | A link goes from a device back to itself (only possible in an edited file: `add_link` refuses it). |
 | `PORT_NOT_FOUND` | The model has no such port (checked for models whose port count is confirmed). |
 | `PORT_KIND_MISMATCH` | No cable can join these two kinds of port, such as Serial to GigabitEthernet. |
 | `CABLE_INCOMPATIBLE` | The explicit cable doesn't fit the ports. |

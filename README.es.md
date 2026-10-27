@@ -139,6 +139,8 @@ Usa el mismo JSON `mcpServers` en `.cursor/mcp.json` dentro de tu proyecto, o en
 
 `save_topology`, `load_topology` y `export_script` resuelven las rutas relativas contra `MCP_TRACER_DIR` si está definida y, si no, contra el directorio de trabajo del servidor, que los clientes MCP suelen fijar de forma arbitraria. Un `~` al inicio significa tu carpeta de usuario. Las rutas absolutas siempre funcionan.
 
+Las tools de archivos solo aceptan sus propias extensiones, sin distinguir mayúsculas de minúsculas: `.json` para `save_topology` y `load_topology`, y `.js` o `.txt` para `export_script`. Cualquier otra, como `.cmd` o `.bat`, se rechaza, así que una llamada a una tool nunca puede escribir un archivo ejecutable. También se rechaza una ruta que nombra un directorio (`~`, `.`, `..`, una unidad sola como `C:` o una carpeta existente) o que tiene `:` en el nombre del archivo. Las rutas no están confinadas a `MCP_TRACER_DIR`; restringirlas a esa carpeta es una opción posible a futuro.
+
 ```json
 {
   "mcpServers": {
@@ -172,7 +174,9 @@ Si un cliente no logra iniciar el servidor (por ejemplo, `spawn npx ENOENT`), ej
 
 ### Tools
 
-Los nombres de dispositivo no distinguen mayúsculas de minúsculas y deben ser únicos. Los nombres de puerto se pueden abreviar (`Gi0/0` pasa a `GigabitEthernet0/0`, `Fa0/1` pasa a `FastEthernet0/1`). Los argumentos marcados con `?` son opcionales.
+Los nombres de dispositivo no distinguen mayúsculas de minúsculas y deben ser únicos. Un nombre tiene de 1 a 64 caracteres: letras, dígitos, espacios y `. _ ( ) / -`, y empieza con una letra o un dígito (`R1`, `Core SW (1)`); `constructor` y `prototype` están reservados. Los nombres de puerto se pueden abreviar (`Gi0/0` pasa a `GigabitEthernet0/0`, `Fa0/1` pasa a `FastEthernet0/1`). Las coordenadas (`x`, `y`) van de -100000 a 100000. Los argumentos marcados con `?` son opcionales.
+
+Las entradas tienen límites de tamaño: 500 dispositivos y 2000 enlaces por topología, 64 caracteres para nombres de modelo y de puerto, 32 para direcciones y máscaras, y hasta 2000 comandos IOS de 512 caracteres cada uno por llamada y por dispositivo.
 
 | Tool | Qué hace | Argumentos |
 |---|---|---|
@@ -188,9 +192,9 @@ Los nombres de dispositivo no distinguen mayúsculas de minúsculas y deben ser 
 | `validate_config` | Informa errores y advertencias, cada uno con un código estable y una solución. | ninguno |
 | `generate_script` | Devuelve el script de PTBuilder, más un segundo bloque de texto con las advertencias, si las hay. Los errores de validación lo bloquean. | `force?` (por defecto `false`) |
 | `reset_topology` | Borra todos los dispositivos, enlaces y configuraciones. | ninguno |
-| `save_topology` | Guarda la topología en un archivo JSON que `load_topology` puede volver a leer. Agrega `.json` si el nombre no tiene extensión y crea las carpetas que falten. | `path`, `overwrite?` (por defecto `false`) |
-| `load_topology` | Reemplaza la topología con una leída de un archivo escrito por `save_topology` (también sirve un objeto de `get_topology` sin envoltorio). Se valida por completo antes de cambiar nada. Máximo 5 MB. | `path` |
-| `export_script` | Escribe el script de PTBuilder en un archivo (agrega `.js` si el nombre no tiene extensión). Misma validación que `generate_script`. | `path`, `overwrite?` (por defecto `false`), `force?` (por defecto `false`) |
+| `save_topology` | Guarda la topología en un archivo `.json` que `load_topology` puede volver a leer. Agrega `.json` si el nombre no tiene extensión y crea las carpetas que falten. | `path`, `overwrite?` (por defecto `false`) |
+| `load_topology` | Reemplaza la topología con una leída de un archivo `.json` escrito por `save_topology` (también sirve un objeto de `get_topology` sin envoltorio). Se valida por completo antes de cambiar nada. Máximo 5 MB. | `path` |
+| `export_script` | Escribe el script de PTBuilder en un archivo `.js` o `.txt` (agrega `.js` si el nombre no tiene extensión). Misma validación que `generate_script`. | `path`, `overwrite?` (por defecto `false`), `force?` (por defecto `false`) |
 
 **Cables** (`cable`): `straight`, `cross`, `roll`, `fiber`, `serial`, `console`, `phone`, `coaxial`, `auto`, `octal`, `usb`, `custom_io`. Si lo omites, el servidor elige uno: `straight` entre dispositivos distintos (router o host con switch o hub), `cross` entre dispositivos del mismo tipo (switch con switch, router con router, router con PC, PC con PC), `straight` de un access point a un switch o hub y `cross` a un router o host, `serial` para puertos Serial y `console` para puertos Console/RS232. `auto`, `roll`, `octal`, `usb` y `custom_io` se pasan a PTBuilder tal cual, y su comportamiento ahí no está verificado.
 
@@ -335,7 +339,7 @@ Los **errores** indican que el script fallaría o se abortaría en Packet Tracer
 |---|---|
 | `UNKNOWN_MODEL` | El modelo no es una clave de la tabla de dispositivos de PTBuilder. |
 | `UNKNOWN_DEVICE` | Un enlace, bloque IOS o configuración IP nombra un dispositivo que no existe. |
-| `SELF_LINK` | Un enlace va de un dispositivo a sí mismo. |
+| `SELF_LINK` | Un enlace va de un dispositivo a sí mismo (solo es posible en un archivo editado a mano: `add_link` lo rechaza). |
 | `PORT_NOT_FOUND` | El modelo no tiene ese puerto (se comprueba en los modelos cuya cantidad de puertos está confirmada). |
 | `PORT_KIND_MISMATCH` | Ningún cable puede unir esos dos tipos de puerto, como Serial con GigabitEthernet. |
 | `CABLE_INCOMPATIBLE` | El cable indicado no encaja en los puertos. |

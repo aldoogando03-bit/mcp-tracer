@@ -67,10 +67,11 @@ describe("validate: errors", () => {
     expect(found[1].message).toMatch(/configurePcIp would throw/);
   });
 
-  it("SELF_LINK: a link between two ports of the same device (the model accepts it)", () => {
-    const t = new Topology();
-    t.addDevice({ name: "S1", model: "2960-24TT" });
-    t.addLink({ dev1: "S1", port1: "Fa0/1", dev2: "S1", port2: "Fa0/2" });
+  it("SELF_LINK: a link between two ports of the same device (addLink rejects it; hand-edited states can hold it)", () => {
+    const t = raw({
+      devices: [{ name: "S1", model: "2960-24TT" }],
+      links: [{ dev1: "S1", port1: "FastEthernet0/1", dev2: "S1", port2: "FastEthernet0/2" }],
+    });
     expect(issuesWith(t, "SELF_LINK", "error")[0].message).toMatch(/connects S1 to itself/);
   });
 
@@ -112,6 +113,14 @@ describe("validate: errors", () => {
     const t = pair("2911", "2960-24TT");
     t.addLink({ dev1: "A", port1: "Gi0/0", dev2: "B", port2: "Gi0/1", cable: "serial" });
     expect(issuesWith(t, "CABLE_INCOMPATIBLE", "error")[0].message).toMatch(/a serial cable cannot join GigabitEthernet and GigabitEthernet ports.*\(straight\)/);
+  });
+
+  it.each(["constructor", "toString", "bogus"])("CABLE_INCOMPATIBLE: a hand-edited cable %j that is not a cable type", (cable) => {
+    const t = raw({
+      devices: [{ name: "R1", model: "2911" }, { name: "S1", model: "2960-24TT" }],
+      links: [{ dev1: "R1", port1: "GigabitEthernet0/0", dev2: "S1", port2: "GigabitEthernet0/1", cable: cable as Link["cable"] }],
+    });
+    expect(issuesWith(t, "CABLE_INCOMPATIBLE", "error")[0].message).toContain(`a ${cable} cable cannot join GigabitEthernet and GigabitEthernet ports; it is not a PTBuilder cable type`);
   });
 
   it("DUPLICATE_PORT: two links on one port", () => {

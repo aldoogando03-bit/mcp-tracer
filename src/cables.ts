@@ -57,8 +57,9 @@ export const CABLE_NEEDS: Readonly<Record<CableType, string>> = {
   custom_io: "IoE custom I/O",
 };
 
-/** True when `cable` can plug into a port of this kind. */
+/** True when `cable` can plug into a port of this kind. Never true for a string that is not a CableType. */
 export const cableFitsPort = (cable: CableType, kind: PortKind): boolean => {
+  if (!Object.hasOwn(CABLE_PORT_KINDS, cable)) return false;
   const kinds = CABLE_PORT_KINDS[cable];
   return kind === "other" || kinds === "any" || kinds.includes(kind);
 };

@@ -1,28 +1,24 @@
 /**
  * MCP prompts: ready-made labs. Each returns one user message with the exact build_topology arguments
  * (addressing computed here), the follow-up tool calls and the checks to run in Packet Tracer.
- * Only catalogued models with verified (or count-verified) ports: 2911, 2960-24TT, 3560-24PS, PC-PT, Server-PT.
+ * Only catalogued models: 2911, 2960-24TT, PC-PT and Server-PT (the ports used are verified or count-verified) and
+ * 3560-24PS (port names unverified, see docs/PTBUILDER_API.md §6).
  */
 import { completable } from "@modelcontextprotocol/sdk/server/completable.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { IPV4, intToIp as ip, ipToInt, maskToPrefix, prefixToInt, prefixToMask as mask } from "./ipv4.js";
 import { compactJson } from "./render.js";
 
 // ---------- IPv4 math ----------
 
 type Net = { addr: number; prefix: number };
 
-const OCTET = "(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
-const IPV4 = new RegExp(`^${OCTET}(\\.${OCTET}){3}$`);
-const toInt = (s: string) => s.split(".").reduce((a, o) => ((a << 8) | Number(o)) >>> 0, 0);
-const ip = (n: number) => [24, 16, 8, 0].map((s) => (n >>> s) & 255).join(".");
-const maskInt = (p: number) => (p === 0 ? 0 : (0xffffffff << (32 - p)) >>> 0);
-const mask = (p: number) => ip(maskInt(p));
-const wildcard = (p: number) => ip(~maskInt(p) >>> 0);
+const wildcard = (p: number) => ip(~prefixToInt(p) >>> 0);
 const cidr = (n: Net) => `${ip(n.addr)}/${n.prefix}`;
 const overlaps = (a: Net, b: Net) => {
-  const m = maskInt(Math.min(a.prefix, b.prefix));
+  const m = prefixToInt(Math.min(a.prefix, b.prefix));
   return ((a.addr & m) >>> 0) === ((b.addr & m) >>> 0);
 };
 
@@ -30,29 +26,30 @@ const overlaps = (a: Net, b: Net) => {
 function parseNet(s: string): { net: Net; hostBits: boolean } | undefined {
   const m = /^\s*([\d.]+)\s*(?:\/\s*(\d{1,2})|\s([\d.]+))\s*$/.exec(s);
   if (!m || !IPV4.test(m[1])) return undefined;
-  let prefix: number;
+  let prefix: number | undefined;
   if (m[2] !== undefined) {
     prefix = Number(m[2]);
     if (prefix > 32) return undefined;
   } else {
     if (!IPV4.test(m[3])) return undefined;
-    const inv = ~toInt(m[3]) >>> 0;
-    if ((inv & (inv + 1)) !== 0) return undefined;
-    prefix = 32 - Math.log2(inv + 1);
+    prefix = maskToPrefix(ipToInt(m[3]));
+    if (prefix === undefined) return undefined;
   }
-  const raw = toInt(m[1]);
-  const addr = (raw & maskInt(prefix)) >>> 0;
+  const raw = ipToInt(m[1]);
+  const addr = (raw & prefixToInt(prefix)) >>> 0;
   return { net: { addr, prefix }, hostBits: addr !== raw };
 }
 
 // ---------- argument parsing (invalid values fall back to defaults, with a note) ----------
 
-const ALIASES: Record<string, string> = { roas: "router-on-a-stick", l3: "l3-switch", svi: "l3-switch", overload: "pat", nat: "static" };
+const ALIASES = new Map([
+  ["roas", "router-on-a-stick"], ["l3", "l3-switch"], ["svi", "l3-switch"], ["overload", "pat"], ["nat", "static"],
+]);
 
 function choice<T extends string>(name: string, value: string | undefined, options: readonly T[], def: T, notes: string[]): T {
   const v = value?.trim().toLowerCase().replace(/[\s_]+/g, "-");
   if (!v) return def;
-  const hit = options.find((o) => o === v || o === ALIASES[v]);
+  const hit = options.find((o) => o === v || o === ALIASES.get(v));
   if (hit) return hit;
   notes.push(`${name} "${value}" is not one of ${options.join(", ")}; using ${def}.`);
   return def;

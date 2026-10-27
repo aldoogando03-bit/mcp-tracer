@@ -4,7 +4,25 @@
  */
 import { z } from "zod";
 import { CABLE_TYPES, type CableType } from "./cables.js";
-import { findPort, formatPorts, getModelInfo, normalizePort, resolveModel, samePort, suggestModels } from "./catalog.js";
+import {
+  MAX_PORT_LENGTH, findPort, formatPorts, getModelInfo, normalizePort, portKey, resolveModel, samePort, suggestModels,
+} from "./catalog.js";
+import { IPV4, ipToInt, maskToPrefix, prefixToMask } from "./ipv4.js";
+
+/**
+ * Input size limits, shared by the tool schemas, the file format and the mutators (so whatever the mutators accept
+ * can be saved and loaded back). Lengths are in characters; coord bounds |x| and |y|.
+ */
+export const LIMITS = {
+  name: 64, model: 64, port: MAX_PORT_LENGTH, iosLine: 512, iosLines: 2000, ip: 32, path: 1024,
+  devices: 500, links: 2000, coord: 100_000,
+} as const;
+
+/** Device names: 1-64 characters from letters, digits, space and . _ ( ) / -, starting with a letter or digit. */
+export const DEVICE_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,63}$/;
+export const DEVICE_NAME_RULE = "1-64 characters: letters, digits, spaces and . _ ( ) / -, starting with a letter or digit";
+/** Names that would collide with JavaScript object internals; denied case-insensitively. */
+const RESERVED_NAMES = new Set(["__proto__", "constructor", "prototype"]);
 
 /** `model` is always an exact PTBuilder key. x/y are both set or both omitted (omitted = auto layout). */
 export type Device = { name: string; model: string; x?: number; y?: number };
@@ -21,37 +39,58 @@ export type TopologySpec = { devices: DeviceInput[]; links?: LinkInput[]; ios?: 
 export type IosResult = { device: Device; added: string[]; dropped: string[]; total: number };
 export type PcResult = { pc: PcIp; ignored: string[] };
 
-/** Stable serialized shape (toJSON / fromJSON). */
+const str = (max: number) => z.string().max(max);
+const coord = z.number().min(-LIMITS.coord).max(LIMITS.coord).optional();
+
+/** Stable serialized shape (toJSON / fromJSON), with the same limits as the tools. */
 export const topologyJsonSchema = z.object({
   version: z.literal(1).optional(),
-  devices: z.array(z.object({ name: z.string(), model: z.string(), x: z.number().optional(), y: z.number().optional() })),
+  devices: z.array(z.object({ name: str(LIMITS.name), model: str(LIMITS.model), x: coord, y: coord })).max(LIMITS.devices),
   links: z
-    .array(z.object({ dev1: z.string(), port1: z.string(), dev2: z.string(), port2: z.string(), cable: z.enum(CABLE_TYPES).optional() }))
+    .array(
+      z.object({
+        dev1: str(LIMITS.name),
+        port1: str(LIMITS.port),
+        dev2: str(LIMITS.name),
+        port2: str(LIMITS.port),
+        cable: z.enum(CABLE_TYPES).optional(),
+      })
+    )
+    .max(LIMITS.links)
     .default([]),
-  configs: z.record(z.string(), z.array(z.string())).default({}),
+  configs: z.record(str(LIMITS.name), z.array(str(LIMITS.iosLine)).max(LIMITS.iosLines)).default({}),
   pcIps: z
     .array(
       z.object({
-        name: z.string(),
+        name: str(LIMITS.name),
         dhcp: z.boolean(),
-        ip: z.string().optional(),
-        mask: z.string().optional(),
-        gateway: z.string().optional(),
-        dns: z.string().optional(),
+        ip: str(LIMITS.ip).optional(),
+        mask: str(LIMITS.ip).optional(),
+        gateway: str(LIMITS.ip).optional(),
+        dns: str(LIMITS.ip).optional(),
       })
     )
+    .max(LIMITS.devices)
     .default([]),
 });
 export type TopologyJSON = { version: 1; devices: Device[]; links: Link[]; configs: Record<string, string[]>; pcIps: PcIp[] };
 
-const fmtLink = (l: Link) => `${l.dev1}:${l.port1} <-> ${l.dev2}:${l.port2}`;
+export const fmtLink = (l: Link) => `${l.dev1}:${l.port1} <-> ${l.dev2}:${l.port2}`;
 
-const OCTET = "(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
-const IPV4 = new RegExp(`^${OCTET}(\\.${OCTET}){3}$`);
+/** Long user input shortened for error messages. */
+const clip = (s: string) => (s.length > LIMITS.name + 16 ? `${s.slice(0, LIMITS.name)}...` : s);
+
+/** Checks a (trimmed) device name against DEVICE_NAME and the reserved names. */
+function checkName(name: string, what: string): string {
+  if (!name) throw new Error(`${what} must not be empty.`);
+  if (!DEVICE_NAME.test(name)) throw new Error(`Invalid device name "${clip(name)}": use ${DEVICE_NAME_RULE} (e.g. R1, S1, PC1).`);
+  if (RESERVED_NAMES.has(name.toLowerCase())) throw new Error(`"${name}" is a reserved name; pick another device name.`);
+  return name;
+}
 
 function checkIp(value: string, field: string): string {
   const v = value.trim();
-  if (!IPV4.test(v)) throw new Error(`Invalid ${field} "${value}": expected a dotted-quad IPv4 address such as 192.168.1.10.`);
+  if (!IPV4.test(v)) throw new Error(`Invalid ${field} "${clip(value)}": expected a dotted-quad IPv4 address such as 192.168.1.10.`);
   return v;
 }
 
@@ -62,20 +101,57 @@ function toMask(value: string): string {
   if (prefix) {
     const n = Number(prefix[1]);
     if (n > 32) throw new Error(`Invalid prefix length "${value}": must be 0-32.`);
-    const bits = n === 0 ? 0 : (0xffffffff << (32 - n)) >>> 0;
-    return [24, 16, 8, 0].map((s) => (bits >>> s) & 255).join(".");
+    return prefixToMask(n);
   }
-  if (!IPV4.test(v)) throw new Error(`Invalid subnet mask "${value}": use 255.255.255.0 or /24.`);
-  const bits = v.split(".").reduce((acc, o) => ((acc << 8) | Number(o)) >>> 0, 0);
-  const inv = ~bits >>> 0;
-  if ((inv & (inv + 1)) !== 0) throw new Error(`Invalid subnet mask "${value}": the 1-bits must be contiguous.`);
+  if (!IPV4.test(v)) throw new Error(`Invalid subnet mask "${clip(value)}": use 255.255.255.0 or /24.`);
+  if (maskToPrefix(ipToInt(v)) === undefined) throw new Error(`Invalid subnet mask "${value}": the 1-bits must be contiguous.`);
   return v;
 }
 
 function checkCoords(x: number | undefined, y: number | undefined) {
   if ((x === undefined) !== (y === undefined)) throw new Error("Give both x and y, or neither (auto layout).");
-  for (const v of [x, y]) if (v !== undefined && !Number.isFinite(v)) throw new Error(`Coordinates must be finite numbers, got ${v}.`);
+  for (const v of [x, y]) {
+    if (v === undefined) continue;
+    if (!Number.isFinite(v)) throw new Error(`Coordinates must be finite numbers, got ${v}.`);
+    if (Math.abs(v) > LIMITS.coord) throw new Error(`Coordinates must be between -${LIMITS.coord} and ${LIMITS.coord}, got ${v}.`);
+  }
 }
+
+/** A Map of devices by exact name that also indexes them by lowercased name, so case-insensitive lookups don't scan. */
+class DeviceMap extends Map<string, Device> {
+  private lower = new Map<string, string>();
+
+  set(name: string, device: Device): this {
+    super.set(name, device);
+    this.lower.set(name.toLowerCase(), name);
+    return this;
+  }
+
+  delete(name: string): boolean {
+    if (!super.delete(name)) return false;
+    const k = name.toLowerCase();
+    if (this.lower.get(k) === name) {
+      this.lower.delete(k);
+      // Only hand-built topologies can hold two names that differ in case; keep the other one findable.
+      for (const n of this.keys()) if (n.toLowerCase() === k) this.lower.set(k, n);
+    }
+    return true;
+  }
+
+  clear(): void {
+    super.clear();
+    this.lower.clear();
+  }
+
+  /** Case-insensitive lookup. */
+  find(name: string): Device | undefined {
+    const exact = this.lower.get(name.toLowerCase());
+    return exact === undefined ? undefined : this.get(exact);
+  }
+}
+
+/** findLink index key: exact device name plus port comparison key. */
+const endKey = (device: string, port: string) => `${device}\u0000${portKey(port)}`;
 
 const DROP_IOS: [RegExp, string][] = [
   [/^en(a(b(le?)?)?)?$/, "enable"],
@@ -105,11 +181,14 @@ export function sanitizeIos(input: string[]): { commands: string[]; dropped: str
 
 export class Topology {
   /** Keyed by exact device name. Lookups from user input should go through getDevice (case-insensitive). */
-  devices = new Map<string, Device>();
+  devices = new DeviceMap();
+  /** Change through the mutators. Direct edits are seen by findLink only when the array is replaced or its length changes. */
   links: Link[] = [];
   /** IOS commands per device name, already sanitized. */
   configs = new Map<string, string[]>();
   pcIps = new Map<string, PcIp>();
+  /** findLink's index of `links` by endKey; rebuilt when `links` is replaced or changes length behind addLink's back. */
+  private ends?: { links: Link[]; length: number; map: Map<string, Link> };
 
   reset() {
     this.devices.clear();
@@ -121,34 +200,41 @@ export class Topology {
   /** Case-insensitive device lookup. */
   getDevice(name: string): Device | undefined {
     const n = name.trim();
-    const exact = this.devices.get(n);
-    if (exact) return exact;
-    const lower = n.toLowerCase();
-    for (const d of this.devices.values()) if (d.name.toLowerCase() === lower) return d;
-    return undefined;
+    return this.devices.get(n) ?? this.devices.find(n);
   }
 
   requireDevice(name: string): Device {
     const d = this.getDevice(name);
     if (d) return d;
     const names = [...this.devices.keys()];
-    throw new Error(`Unknown device "${name}". ${names.length ? `Existing devices: ${names.join(", ")}.` : "The topology is empty."}`);
+    throw new Error(`Unknown device "${clip(name)}". ${names.length ? `Existing devices: ${names.join(", ")}.` : "The topology is empty."}`);
+  }
+
+  private endIndex(): Map<string, Link> {
+    const e = this.ends;
+    if (e && e.links === this.links && e.length === this.links.length) return e.map;
+    const map = new Map<string, Link>();
+    for (const l of this.links) {
+      for (const k of [endKey(l.dev1, l.port1), endKey(l.dev2, l.port2)]) if (!map.has(k)) map.set(k, l);
+    }
+    this.ends = { links: this.links, length: this.links.length, map };
+    return map;
   }
 
   /** The link using device:port, if any. */
   findLink(device: string, port: string): Link | undefined {
     const d = this.getDevice(device);
-    if (!d) return undefined;
-    return this.links.find((l) => (l.dev1 === d.name && samePort(l.port1, port)) || (l.dev2 === d.name && samePort(l.port2, port)));
+    return d && this.endIndex().get(endKey(d.name, port));
   }
 
   addDevice(input: DeviceInput): Device {
-    const name = input.name.trim();
-    if (!name) throw new Error("Device name must not be empty.");
+    const name = checkName(input.name.trim(), "Device name");
     const clash = this.getDevice(name);
     if (clash) {
       throw new Error(`A device named "${clash.name}" already exists (names are case-insensitive). Pick another name or use remove_device / rename_device.`);
     }
+    if (this.devices.size >= LIMITS.devices) throw new Error(`The topology already has ${LIMITS.devices} devices, the maximum.`);
+    if (input.model.length > LIMITS.model) throw new Error(`Model "${clip(input.model)}" is too long (at most ${LIMITS.model} characters).`);
     const resolved = resolveModel(input.model);
     if (!resolved) {
       throw new Error(
@@ -163,9 +249,11 @@ export class Topology {
     return device;
   }
 
+  /** The port name to store: the catalog's spelling when the model lists the port, else the normalized input. */
   private checkPort(d: Device, port: string): string {
     const normalized = normalizePort(port);
     if (!normalized) throw new Error(`Port name for ${d.name} must not be empty.`);
+    if (normalized.length > LIMITS.port) throw new Error(`Port name "${clip(normalized)}" is too long (at most ${LIMITS.port} characters).`);
     const info = getModelInfo(d.model);
     const known = findPort(info, normalized);
     if (known) return known.name;
@@ -177,13 +265,22 @@ export class Topology {
   }
 
   addLink(input: LinkInput): Link {
+    if (this.links.length >= LIMITS.links) throw new Error(`The topology already has ${LIMITS.links} links, the maximum.`);
     const a = this.requireDevice(input.dev1);
     const b = this.requireDevice(input.dev2);
     const port1 = this.checkPort(a, input.port1);
     const port2 = this.checkPort(b, input.port2);
-    if (a === b && samePort(port1, port2)) throw new Error(`Cannot link ${a.name}:${port1} to itself.`);
+    if (a === b) {
+      throw new Error(
+        samePort(port1, port2)
+          ? `Cannot link ${a.name}:${port1} to itself.`
+          : `Cannot link ${a.name}:${port1} to ${a.name}:${port2}: both ends are on ${a.name}, and Packet Tracer refuses a cable ` +
+              "between two ports of the same device. Link to another device."
+      );
+    }
+    const index = this.endIndex();
     for (const [d, p] of [[a, port1], [b, port2]] as const) {
-      const used = this.findLink(d.name, p);
+      const used = index.get(endKey(d.name, p));
       if (used) throw new Error(`Port ${d.name}:${p} is already used by the link ${fmtLink(used)}. Use another port or remove_link first.`);
     }
     if (input.cable !== undefined && !CABLE_TYPES.includes(input.cable)) {
@@ -192,6 +289,8 @@ export class Topology {
     const link: Link = { dev1: a.name, port1, dev2: b.name, port2 };
     if (input.cable) link.cable = input.cable;
     this.links.push(link);
+    index.set(endKey(a.name, port1), link).set(endKey(b.name, port2), link);
+    this.ends!.length = this.links.length;
     return link;
   }
 
@@ -224,8 +323,7 @@ export class Topology {
   /** Renames a device; links, IOS commands and PC IP configuration follow. IOS `hostname` lines are untouched. */
   renameDevice(oldName: string, newName: string): Device {
     const d = this.requireDevice(oldName);
-    const name = newName.trim();
-    if (!name) throw new Error("New device name must not be empty.");
+    const name = checkName(newName.trim(), "New device name");
     const clash = this.getDevice(name);
     if (clash && clash !== d) throw new Error(`A device named "${clash.name}" already exists (names are case-insensitive).`);
     if (name === d.name) return d;
@@ -243,6 +341,7 @@ export class Topology {
       if (l.dev1 === old) l.dev1 = name;
       if (l.dev2 === old) l.dev2 = name;
     }
+    this.ends = undefined; // the links changed in place
     return renamed;
   }
 
@@ -256,11 +355,22 @@ export class Topology {
           `(e.g. 2911, 2960-24TT, 3560-24PS).${info?.pcIp ? " Use configure_pc to set its IP address." : ""}`
       );
     }
+    if (input.commands.length > LIMITS.iosLines) {
+      throw new Error(`Too many IOS commands for ${device.name}: ${input.commands.length} (at most ${LIMITS.iosLines} per call).`);
+    }
+    const long = input.commands.findIndex((c) => c.length > LIMITS.iosLine);
+    if (long >= 0) throw new Error(`IOS command ${long + 1} for ${device.name} is longer than ${LIMITS.iosLine} characters.`);
     const { commands, dropped } = sanitizeIos(input.commands);
     if (!commands.length && !input.replace) {
       throw new Error(`No IOS commands left to add for ${device.name}${dropped.length ? ` (dropped: ${dropped.join(" | ")})` : ""}.`);
     }
     const all = [...(input.replace ? [] : (this.configs.get(device.name) ?? [])), ...commands];
+    if (all.length > LIMITS.iosLines) {
+      throw new Error(
+        `${device.name} would have ${all.length} IOS commands; the limit is ${LIMITS.iosLines} per device. ` +
+          "Use replace: true to start over with fewer commands."
+      );
+    }
     if (all.length) this.configs.set(device.name, all);
     else this.configs.delete(device.name);
     return { device, added: commands, dropped, total: all.length };

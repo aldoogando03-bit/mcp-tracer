@@ -125,7 +125,10 @@ export const CATALOG: ModelInfo[] = [
     ports: fastSwitchPorts(true, false), portsVerified: "unverified" },
   { model: "2960-24TT", aliases: ["2960", "2960-24", "Catalyst 2960"], category: "switch", layer: 2, ios: true, pcIp: false,
     ports: fastSwitchPorts(true, true), portsVerified: "partial",
-    notes: ["FastEthernet0/1 and GigabitEthernet0/1 verified; the rest of the ranges unverified.", "Vlan1 is an SVI, not a cabling port."] },
+    notes: [
+      "FastEthernet0/1 and GigabitEthernet0/1 verified; the rest of FastEthernet0/1-24 and GigabitEthernet0/1-2 count verified, names unverified.",
+      "Vlan1 is an SVI, not a cabling port.",
+    ] },
 
   { model: "3560-24PS", aliases: ["3560", "3560-24"], category: "l3switch", layer: 2, ios: true, pcIp: false,
     ports: fastSwitchPorts(true, false), portsVerified: "unverified",
@@ -229,7 +232,7 @@ function distance(a: string, b: string): number {
 
 /** Closest model keys to an unknown input (catalogued models first on ties). */
 export function suggestModels(input: string, limit = 5): string[] {
-  const k = key(input);
+  const k = key(input).slice(0, 64); // the edit distance is O(length), so cap it
   const best = new Map<string, number>();
   const consider = (candidate: string, model: string) => {
     let d = distance(k, candidate);
@@ -242,9 +245,9 @@ export function suggestModels(input: string, limit = 5): string[] {
   return [...best].sort((a, b) => a[1] - b[1]).slice(0, limit).map(([m]) => m);
 }
 
-const PREFIXES: Record<string, string> = {};
+const PREFIXES = new Map<string, string>();
 const prefix = (canonical: string, ...abbrevs: string[]) => {
-  for (const a of [canonical.toLowerCase(), ...abbrevs]) PREFIXES[a] = canonical;
+  for (const a of [canonical.toLowerCase(), ...abbrevs]) PREFIXES.set(a, canonical);
 };
 prefix("GigabitEthernet", "g", "gi", "gig", "gige", "gigabit");
 prefix("TenGigabitEthernet", "te", "ten", "tengig", "tengige");
@@ -262,25 +265,31 @@ prefix("Port-channel", "po", "portchannel");
 prefix("Internet");
 prefix("Port");
 
+/** Longest port name accepted anywhere. normalizePort returns longer input trimmed, without parsing it. */
+export const MAX_PORT_LENGTH = 64;
+
 /**
- * Expands interface abbreviations to Packet Tracer's full names and strips spaces:
+ * Expands known interface prefixes and their abbreviations to Packet Tracer's full names and strips spaces:
  * "gi0/0" -> GigabitEthernet0/0, "Fa 0/1" -> FastEthernet0/1, "se0/0/0" -> Serial0/0/0, "con" -> Console,
- * "rs 232" -> RS232. Generic "Port N" names keep their space. Unknown prefixes are kept as given.
+ * "rs 232" -> RS232. Generic "Port N" names keep their space. Anything else (unknown prefixes such as "foo 1",
+ * other shapes, names over MAX_PORT_LENGTH) is returned trimmed but otherwise as given.
  */
 export function normalizePort(name: string): string {
   const s = name.trim();
+  if (s.length > MAX_PORT_LENGTH) return s;
   if (/^rs[\s-]*232$/i.test(s)) return "RS232";
-  const m = /^([a-z][a-z_-]*?)[\s_-]*(\d[\d\s/.:]*)?$/i.exec(s);
-  if (!m) return s;
+  // Linear time: the prefix must end with a letter, so it never competes with the separator run after it.
+  const m = /^([a-z](?:[a-z_-]*[a-z])?)[\s_-]*(\d[\d\s/.:]*)?$/i.exec(s);
+  const canonical = m && (PREFIXES.get(m[1].toLowerCase().replace(/[_-]/g, "")) ?? PREFIXES.get(m[1].toLowerCase()));
+  if (!m || !canonical) return s;
   const rest = (m[2] ?? "").replace(/\s+/g, "");
-  const canonical = PREFIXES[m[1].toLowerCase().replace(/[_-]/g, "")] ?? PREFIXES[m[1].toLowerCase()];
-  if (!canonical) return m[1] + rest;
   if (canonical === "Port") return rest ? `Port ${rest}` : "Port";
   if ((canonical === "Console" || canonical === "Aux") && (rest === "" || rest === "0")) return canonical;
   return canonical + rest;
 }
 
-const portKey = (name: string) => normalizePort(name).toLowerCase().replace(/\s+/g, "");
+/** Comparison key of a port name: normalized, lowercased, spaces removed. */
+export const portKey = (name: string) => normalizePort(name).toLowerCase().replace(/\s+/g, "");
 
 /** True when two port names denote the same port (case, spaces and abbreviations ignored). */
 export const samePort = (a: string, b: string) => portKey(a) === portKey(b);
