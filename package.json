@@ -15,13 +15,13 @@
     "claude",
     "ai-agents"
   ],
-  "homepage": "https://github.com/GITHUB_USER/mcp-tracer#readme",
+  "homepage": "https://github.com/aldoogando03-bit/mcp-tracer#readme",
   "bugs": {
-    "url": "https://github.com/GITHUB_USER/mcp-tracer/issues"
+    "url": "https://github.com/aldoogando03-bit/mcp-tracer/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GITHUB_USER/mcp-tracer.git"
+    "url": "git+https://github.com/aldoogando03-bit/mcp-tracer.git"
   },
   "license": "MIT",
   "author": "Aldo Ariel Ogando Peña (A-TECH)",
@@ -42,7 +42,7 @@
     "build": "npm run clean && tsc",
     "start": "node build/index.js",
     "dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "examples": "npm run build && node scripts/build-examples.mjs",

@@ -1,0 +1,11 @@
+// Type-checks src/, the tests and vitest.config.ts without emitting anything. vitest's typecheck mode runs
+// `tsc -p test/tsconfig.json` during `npm test`; editors also pick this file up for test/. The root tsconfig.json
+// stays src-only (rootDir "src"), so the build output is unchanged.
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".."
+  },
+  "include": ["../src", ".", "../vitest.config.ts"]
+}
