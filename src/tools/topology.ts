@@ -2,10 +2,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CABLE_TYPES, resolveCable } from "../cables.js";
 import { CATALOG, findPort, formatPorts, getModelInfo, type Category } from "../catalog.js";
-import { generatePTBuilderScript } from "../ptbuilder.js";
+import { layoutPositions } from "../layout.js";
+import { issueReport, plural, renderScript } from "../render.js";
 import type { Session } from "../session.js";
 import { Topology, type Link } from "../topology.js";
-import { validate, type Issue } from "../validate.js";
+import { formatValidation, validate } from "../validate.js";
 import { safe, text } from "./util.js";
 
 const keys = (...cats: Category[]) => CATALOG.filter((m) => cats.includes(m.category)).map((m) => m.model).join(", ");
@@ -45,8 +46,6 @@ const pcFields = {
 const linkFields = { dev1: name, port1: port, dev2: name, port2: port, cable };
 
 const fmtLink = (l: Link) => `${l.dev1}:${l.port1} <-> ${l.dev2}:${l.port2}`;
-const fmtIssue = (i: Issue) => `- ${i.severity.toUpperCase()} [${i.code}] ${i.message}`;
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function deviceDetails(modelKey: string): string[] {
   const info = getModelInfo(modelKey);
@@ -72,7 +71,7 @@ export function registerTopologyTools(server: McpServer, session: Session) {
       safe(() => {
         const d = session.topology.addDevice(a);
         const alias = d.model !== a.model ? ` (resolved from "${a.model}")` : "";
-        const where = d.x !== undefined ? ` at (${d.x}, ${d.y})` : " (auto position)";
+        const where = d.x !== undefined ? ` at (${d.x}, ${d.y})` : "; no x/y given, so its position will be auto-computed from its type and links";
         return [`Added ${d.name}: ${d.model}${alias}${where}.`, ...deviceDetails(d.model)].join("\n");
       })
   );
@@ -242,15 +241,22 @@ export function registerTopologyTools(server: McpServer, session: Session) {
     "get_topology",
     {
       title: "Get topology",
-      description: "Return the current topology as JSON: devices, links (with the cable that will be emitted), IOS commands and host IP configurations.",
+      description:
+        "Return the current topology as JSON: devices (with the position that will be emitted; autoPlaced: true when the " +
+        "auto layout computed it), links (with the cable that will be emitted), IOS commands and host IP configurations.",
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     () =>
       safe(() => {
         const t = session.topology;
         const j = t.toJSON();
+        const pos = layoutPositions(t);
+        const devices = j.devices.map((d) => {
+          const p = pos.get(d.name)!;
+          return { name: d.name, model: d.model, x: p.x, y: p.y, autoPlaced: d.x === undefined || d.y === undefined };
+        });
         const links = t.links.map((l) => ({ ...l, cable: resolveCable(t, l), ...(l.cable ? {} : { cableInferred: true }) }));
-        return JSON.stringify({ ...j, links }, null, 2);
+        return JSON.stringify({ ...j, devices, links }, null, 2);
       })
   );
 
@@ -258,15 +264,13 @@ export function registerTopologyTools(server: McpServer, session: Session) {
     "validate_config",
     {
       title: "Validate topology",
-      description: "Check the topology for problems. Errors (e.g. unknown models, ports used twice) block generate_script; warnings (e.g. devices without links) do not.",
+      description:
+        "Check the topology before generate_script. Errors mean the PTBuilder script would fail or abort (e.g. PORT_KIND_MISMATCH, " +
+        "CABLE_INCOMPATIBLE, DUPLICATE_PORT, IOS_ON_NON_IOS) and block generate_script; warnings mean it may not work as intended " +
+        "in Packet Tracer (e.g. UNVERIFIED_PORT, CABLE_SUSPICIOUS, GATEWAY_NOT_IN_SUBNET, ISOLATED_DEVICE). Each issue has a code and a fix.",
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    () =>
-      safe(() => {
-        const { errors, warnings } = validate(session.topology);
-        if (!errors.length && !warnings.length) return "No problems found.";
-        return [`${plural(errors.length, "error")}, ${plural(warnings.length, "warning")}:`, ...[...errors, ...warnings].map(fmtIssue)].join("\n");
-      })
+    () => safe(() => formatValidation(validate(session.topology)))
   );
 
   server.registerTool(
@@ -282,17 +286,9 @@ export function registerTopologyTools(server: McpServer, session: Session) {
     },
     (a) =>
       safe(() => {
-        const t = session.topology;
-        const { errors, warnings } = validate(t);
-        if (errors.length && !a.force) {
-          throw new Error(
-            [`The topology has ${plural(errors.length, "error")}; fix them or call generate_script with force: true.`, ...errors.map(fmtIssue)].join("\n")
-          );
-        }
-        const issues = [...errors, ...warnings];
-        const script = generatePTBuilderScript(t);
-        const heading = errors.length ? "Generated with force: true despite these issues:" : "Warnings:";
-        return issues.length ? text(script, [heading, ...issues.map(fmtIssue)].join("\n")) : text(script);
+        const r = renderScript(session.topology, { force: a.force });
+        const report = issueReport(r);
+        return report ? text(r.script, report) : text(r.script);
       })
   );
 
