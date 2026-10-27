@@ -1,22 +1,25 @@
 {
   "name": "packet-tracer-mcp",
   "version": "0.1.0",
-  "description": "MCP server que permite a cualquier agente diseñar topologías de Cisco Packet Tracer generando scripts PTBuilder.",
+  "description": "MCP server that lets any AI agent design Cisco Packet Tracer topologies by generating PTBuilder scripts.",
   "type": "module",
-  "bin": { "packet-tracer-mcp": "build/index.js" },
+  "bin": {
+    "packet-tracer-mcp": "build/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node build/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "zod": "^3.23.8"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.6.0"
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
   },
   "license": "MIT"
 }
