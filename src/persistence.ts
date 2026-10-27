@@ -9,7 +9,7 @@ import { z } from "zod";
 import { Topology } from "./topology.js";
 import { VERSION } from "./version.js";
 
-export const FILE_FORMAT = "packet-tracer-mcp/topology";
+export const FILE_FORMAT = "mcp-tracer/topology";
 export const FILE_FORMAT_VERSION = 1;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -25,9 +25,9 @@ export type LoadedFile = { topology: Topology; generator?: string; savedAt?: str
 
 const expandHome = (p: string) => (p === "~" ? homedir() : /^~[\\/]/.test(p) ? path.join(homedir(), p.slice(2)) : p);
 
-/** Directory that relative paths resolve against: $PACKET_TRACER_MCP_DIR if set, else the process cwd. */
+/** Directory that relative paths resolve against: $MCP_TRACER_DIR if set, else the process cwd. */
 export function baseDir(): string {
-  const env = process.env.PACKET_TRACER_MCP_DIR?.trim();
+  const env = process.env.MCP_TRACER_DIR?.trim();
   return env ? path.resolve(expandHome(env)) : process.cwd();
 }
 
@@ -91,7 +91,7 @@ export function serializeTopology(t: Topology, savedAt = new Date()): string {
   const doc = {
     format: FILE_FORMAT,
     formatVersion: FILE_FORMAT_VERSION,
-    generator: `packet-tracer-mcp v${VERSION}`,
+    generator: `mcp-tracer v${VERSION}`,
     savedAt: savedAt.toISOString(),
     topology: t.toJSON(),
   };
@@ -132,7 +132,7 @@ export function parseTopologyFile(content: string): LoadedFile {
   }
   if (typeof obj.formatVersion === "number" && obj.formatVersion > FILE_FORMAT_VERSION) {
     throw new Error(
-      `File format version ${obj.formatVersion} is newer than this server supports (${FILE_FORMAT_VERSION}). Upgrade packet-tracer-mcp to load it.`
+      `File format version ${obj.formatVersion} is newer than this server supports (${FILE_FORMAT_VERSION}). Upgrade mcp-tracer to load it.`
     );
   }
   const env = envelopeSchema.safeParse(obj);

@@ -8,7 +8,7 @@ import { VERSION } from "./version.js";
 
 /** Builds a fully registered server with its own Session (not connected to any transport). */
 export function createServer(): McpServer {
-  const server = new McpServer({ name: "packet-tracer-mcp", version: VERSION });
+  const server = new McpServer({ name: "mcp-tracer", version: VERSION });
   const session = new Session();
   registerTopologyTools(server, session);
   registerFileTools(server, session);

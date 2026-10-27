@@ -1,16 +1,52 @@
 {
-  "name": "packet-tracer-mcp",
+  "name": "mcp-tracer",
   "version": "0.1.0",
   "description": "MCP server that lets any AI agent design Cisco Packet Tracer topologies by generating PTBuilder scripts.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "packet-tracer",
+    "cisco",
+    "ptbuilder",
+    "networking",
+    "ccna",
+    "network-topology",
+    "claude",
+    "ai-agents"
+  ],
+  "homepage": "https://github.com/GITHUB_USER/mcp-tracer#readme",
+  "bugs": {
+    "url": "https://github.com/GITHUB_USER/mcp-tracer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GITHUB_USER/mcp-tracer.git"
+  },
+  "license": "MIT",
+  "author": "Aldo Ariel Ogando Peña (A-TECH)",
   "type": "module",
   "bin": {
-    "packet-tracer-mcp": "build/index.js"
+    "mcp-tracer": "build/index.js"
+  },
+  "files": [
+    "build",
+    "docs/PTBUILDER_API.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
-    "build": "tsc",
+    "clean": "node -e \"require('fs').rmSync('build',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc",
     "start": "node build/index.js",
     "dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "examples": "npm run build && node scripts/build-examples.mjs",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
@@ -19,7 +55,8 @@
   "devDependencies": {
     "@types/node": "^22.20.5",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
-  },
-  "license": "MIT"
+    "typescript": "^5.9.3",
+    "vitest": "4.1.12",
+    "vite": "7.3.7"
+  }
 }

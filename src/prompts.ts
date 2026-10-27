@@ -240,7 +240,7 @@ function vlanLab(a: { vlans?: string; hosts_per_vlan?: string; inter_vlan?: stri
       : routed ? [`From PC1 ping its gateway ${hosts[0].gateway}.`] : []),
   ];
   const expected = routed ? undefined : "the warning that the PCs have no default gateway";
-  return lab({ goal: "Build a VLAN lab in Cisco Packet Tracer with the packet-tracer-mcp tools.", notes, design, spec, verify, expected });
+  return lab({ goal: "Build a VLAN lab in Cisco Packet Tracer with the mcp-tracer tools.", notes, design, spec, verify, expected });
 }
 
 // ---------- ospf_lab ----------
@@ -313,7 +313,7 @@ function ospfLab(a: { routers?: string; area?: string; topology?: string }): Get
         ]
       : []),
   ];
-  return lab({ goal: "Build an OSPF lab in Cisco Packet Tracer with the packet-tracer-mcp tools.", notes, design, spec, verify });
+  return lab({ goal: "Build an OSPF lab in Cisco Packet Tracer with the mcp-tracer tools.", notes, design, spec, verify });
 }
 
 // ---------- dhcp_lab ----------
@@ -392,7 +392,7 @@ function dhcpLab(a: { network?: string; dhcp_server?: string; hosts?: string }):
     ...(mode === "router" ? ["R1: show ip dhcp binding, show ip dhcp pool."] : []),
     `From PC1 ping ${gw}${count > 1 ? " and PC2's leased address" : ""}.`,
   ];
-  return lab({ goal: "Build a DHCP lab in Cisco Packet Tracer with the packet-tracer-mcp tools.", notes, design, spec, manual, verify });
+  return lab({ goal: "Build a DHCP lab in Cisco Packet Tracer with the mcp-tracer tools.", notes, design, spec, manual, verify });
 }
 
 // ---------- nat_lab ----------
@@ -493,7 +493,7 @@ function natLab(a: { nat_type?: string; inside_network?: string; outside_network
         ? `Each PC gets a pool address from ${ip(O + 9)}; translations appear only after inside traffic.`
         : `From WEB1 ping ${ip(O + 9)}: it reaches PC1 through the static mapping.`,
   ];
-  return lab({ goal: "Build a NAT lab in Cisco Packet Tracer with the packet-tracer-mcp tools.", notes, design, spec, verify });
+  return lab({ goal: "Build a NAT lab in Cisco Packet Tracer with the mcp-tracer tools.", notes, design, spec, verify });
 }
 
 // ---------- registration ----------

@@ -19,7 +19,7 @@ async function safeAsync(fn: () => Promise<string | CallToolResult>): Promise<Ca
 }
 
 const where = () =>
-  `Use an absolute path: relative paths resolve against $PACKET_TRACER_MCP_DIR if set, else the server's working directory ` +
+  `Use an absolute path: relative paths resolve against $MCP_TRACER_DIR if set, else the server's working directory ` +
   `(now ${baseDir()}), which MCP clients often set arbitrarily. "~" is the user's home directory.`;
 
 const filePath = (what: string, ext: string) =>

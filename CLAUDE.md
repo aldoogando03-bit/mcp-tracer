@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for AI agents and contributors working on **packet-tracer-mcp** (MIT, published to GitHub and npm).
+Guidance for AI agents and contributors working on **mcp-tracer** (MIT, published to GitHub and npm).
 
 ## What this is
 
@@ -27,7 +27,7 @@ Data flow:
 | `src/layout.ts` | `layoutPositions(t)`: keeps explicit x/y, places the rest in rows (routers → L3 switches → switches → hosts). |
 | `src/ptbuilder.ts` | `generatePTBuilderScript(t)`: pure string generation. |
 | `src/render.ts` | `renderScript(t, { force })`: validation-gated rendering shared by `generate_script` and `export_script`. |
-| `src/persistence.ts` | Topology file format, path resolution (`PACKET_TRACER_MCP_DIR`, else cwd), size-capped reads, no-overwrite writes. |
+| `src/persistence.ts` | Topology file format, path resolution (`MCP_TRACER_DIR`, else cwd), size-capped reads, no-overwrite writes. |
 | `src/tools/topology.ts`, `src/tools/files.ts` | Tool registration. `tools/util.ts` holds `safe()` / `text()` / `fail()`. |
 | `src/resources.ts` | `pt://catalog` and the `pt://catalog/{model}` template. |
 | `src/prompts.ts` | `vlan_lab`, `ospf_lab`, `dhcp_lab`, `nat_lab`: each embeds a computed `build_topology` spec. |

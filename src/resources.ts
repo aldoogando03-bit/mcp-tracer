@@ -32,7 +32,7 @@ const entry = (m: ModelInfo) => ({
 });
 
 const header = () => ({
-  generatedBy: `packet-tracer-mcp v${VERSION}`,
+  generatedBy: `mcp-tracer v${VERSION}`,
   ptbuilder: "https://github.com/kimmknight/PTBuilder",
   verification:
     'Nothing here was run in Packet Tracer. verified: false marks a port name that is unverified ("sin verificar" in ' +

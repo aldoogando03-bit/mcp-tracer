@@ -1,5 +1,5 @@
 /** stderr-only logger: stdout is reserved for the MCP stdio protocol. */
-const PREFIX = "[packet-tracer-mcp]";
+const PREFIX = "[mcp-tracer]";
 
 export const log = {
   info: (...args: unknown[]) => console.error(PREFIX, "info:", ...args),
