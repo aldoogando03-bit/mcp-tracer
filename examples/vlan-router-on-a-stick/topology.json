@@ -1,0 +1,133 @@
+{
+  "format": "mcp-tracer/topology",
+  "formatVersion": 1,
+  "generator": "mcp-tracer v0.1.0",
+  "savedAt": "2026-10-27T00:00:00.000Z",
+  "topology": {
+    "version": 1,
+    "devices": [
+      {
+        "name": "R1",
+        "model": "2911"
+      },
+      {
+        "name": "S1",
+        "model": "2960-24TT"
+      },
+      {
+        "name": "PC1",
+        "model": "PC-PT"
+      },
+      {
+        "name": "PC2",
+        "model": "PC-PT"
+      },
+      {
+        "name": "PC3",
+        "model": "PC-PT"
+      },
+      {
+        "name": "PC4",
+        "model": "PC-PT"
+      }
+    ],
+    "links": [
+      {
+        "dev1": "R1",
+        "port1": "GigabitEthernet0/0",
+        "dev2": "S1",
+        "port2": "GigabitEthernet0/1"
+      },
+      {
+        "dev1": "PC1",
+        "port1": "FastEthernet0",
+        "dev2": "S1",
+        "port2": "FastEthernet0/1"
+      },
+      {
+        "dev1": "PC2",
+        "port1": "FastEthernet0",
+        "dev2": "S1",
+        "port2": "FastEthernet0/2"
+      },
+      {
+        "dev1": "PC3",
+        "port1": "FastEthernet0",
+        "dev2": "S1",
+        "port2": "FastEthernet0/3"
+      },
+      {
+        "dev1": "PC4",
+        "port1": "FastEthernet0",
+        "dev2": "S1",
+        "port2": "FastEthernet0/4"
+      }
+    ],
+    "configs": {
+      "R1": [
+        "hostname R1",
+        "interface GigabitEthernet0/0",
+        "no shutdown",
+        "exit",
+        "interface GigabitEthernet0/0.10",
+        "encapsulation dot1Q 10",
+        "ip address 192.168.10.1 255.255.255.0",
+        "exit",
+        "interface GigabitEthernet0/0.20",
+        "encapsulation dot1Q 20",
+        "ip address 192.168.20.1 255.255.255.0",
+        "exit"
+      ],
+      "S1": [
+        "hostname S1",
+        "vlan 10",
+        "name STAFF",
+        "exit",
+        "vlan 20",
+        "name GUEST",
+        "exit",
+        "interface GigabitEthernet0/1",
+        "switchport mode trunk",
+        "exit",
+        "interface range FastEthernet0/1 - 2",
+        "switchport mode access",
+        "switchport access vlan 10",
+        "exit",
+        "interface range FastEthernet0/3 - 4",
+        "switchport mode access",
+        "switchport access vlan 20",
+        "exit"
+      ]
+    },
+    "pcIps": [
+      {
+        "name": "PC1",
+        "dhcp": false,
+        "ip": "192.168.10.10",
+        "mask": "255.255.255.0",
+        "gateway": "192.168.10.1"
+      },
+      {
+        "name": "PC2",
+        "dhcp": false,
+        "ip": "192.168.10.11",
+        "mask": "255.255.255.0",
+        "gateway": "192.168.10.1"
+      },
+      {
+        "name": "PC3",
+        "dhcp": false,
+        "ip": "192.168.20.10",
+        "mask": "255.255.255.0",
+        "gateway": "192.168.20.1"
+      },
+      {
+        "name": "PC4",
+        "dhcp": false,
+        "ip": "192.168.20.11",
+        "mask": "255.255.255.0",
+        "gateway": "192.168.20.1"
+      }
+    ]
+  }
+}

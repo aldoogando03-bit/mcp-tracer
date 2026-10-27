@@ -1,0 +1,86 @@
+name: Port or model verification
+description: Report port names, model behaviour or cable behaviour you confirmed in a real Packet Tracer run.
+title: "[verify] "
+labels: ["verification"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Nothing in mcp-tracer has been confirmed in a real Packet Tracer run yet, and many port names are tagged **"sin verificar"** (unverified). A report like this one lets us mark them as verified.
+
+        The current claims are in docs/PTBUILDER_API.md (§6 for ports, §8 for the full list of open questions) and in the `pt://catalog/<model>` resource.
+
+  - type: input
+    id: model
+    attributes:
+      label: Model key
+      description: The exact PTBuilder model key.
+      placeholder: "2960-24TT"
+    validations:
+      required: true
+
+  - type: input
+    id: packet-tracer
+    attributes:
+      label: Packet Tracer version
+      description: Help > About in Packet Tracer.
+      placeholder: "9.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: ptbuilder
+    attributes:
+      label: PTBuilder version or commit
+      description: Needed if you used the Builder Code Editor or a generated script.
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: ports
+    attributes:
+      label: Port names
+      description: Every port of the device, spelled exactly as Packet Tracer shows it.
+      placeholder: |
+        FastEthernet0/1 ... FastEthernet0/24
+        GigabitEthernet0/1, GigabitEthernet0/2
+        Console
+    validations:
+      required: true
+
+  - type: dropdown
+    id: method
+    attributes:
+      label: How did you verify it?
+      multiple: true
+      options:
+        - Output of getPorts() for the device
+        - Screenshot of the device (Physical or Config tab, or the port menu when connecting a cable)
+        - A generated script ran and addLink created the links
+        - Other (explain below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Paste the `getPorts()` output, or drag screenshots here. docs/PTBUILDER_API.md §8 and PTBuilder issue #1 describe how to run `getPorts()`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: other
+    attributes:
+      label: Other findings
+      description: Anything else from docs/PTBUILDER_API.md §8 you observed, such as how `auto` or `straight` cables behave between switches, console port names, or whether a 3650-24PS gets power.

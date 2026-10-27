@@ -1,0 +1,187 @@
+{
+  "format": "mcp-tracer/topology",
+  "formatVersion": 1,
+  "generator": "mcp-tracer v0.1.0",
+  "savedAt": "2026-10-27T00:00:00.000Z",
+  "topology": {
+    "version": 1,
+    "devices": [
+      {
+        "name": "R1",
+        "model": "2911"
+      },
+      {
+        "name": "R2",
+        "model": "2911"
+      },
+      {
+        "name": "R3",
+        "model": "2911"
+      },
+      {
+        "name": "S1",
+        "model": "2960-24TT"
+      },
+      {
+        "name": "S2",
+        "model": "2960-24TT"
+      },
+      {
+        "name": "S3",
+        "model": "2960-24TT"
+      },
+      {
+        "name": "PC1",
+        "model": "PC-PT"
+      },
+      {
+        "name": "PC2",
+        "model": "PC-PT"
+      },
+      {
+        "name": "PC3",
+        "model": "PC-PT"
+      }
+    ],
+    "links": [
+      {
+        "dev1": "R1",
+        "port1": "GigabitEthernet0/1",
+        "dev2": "R2",
+        "port2": "GigabitEthernet0/1"
+      },
+      {
+        "dev1": "R2",
+        "port1": "GigabitEthernet0/2",
+        "dev2": "R3",
+        "port2": "GigabitEthernet0/1"
+      },
+      {
+        "dev1": "R1",
+        "port1": "GigabitEthernet0/0",
+        "dev2": "S1",
+        "port2": "GigabitEthernet0/1"
+      },
+      {
+        "dev1": "R2",
+        "port1": "GigabitEthernet0/0",
+        "dev2": "S2",
+        "port2": "GigabitEthernet0/1"
+      },
+      {
+        "dev1": "R3",
+        "port1": "GigabitEthernet0/0",
+        "dev2": "S3",
+        "port2": "GigabitEthernet0/1"
+      },
+      {
+        "dev1": "PC1",
+        "port1": "FastEthernet0",
+        "dev2": "S1",
+        "port2": "FastEthernet0/1"
+      },
+      {
+        "dev1": "PC2",
+        "port1": "FastEthernet0",
+        "dev2": "S2",
+        "port2": "FastEthernet0/1"
+      },
+      {
+        "dev1": "PC3",
+        "port1": "FastEthernet0",
+        "dev2": "S3",
+        "port2": "FastEthernet0/1"
+      }
+    ],
+    "configs": {
+      "R1": [
+        "hostname R1",
+        "interface GigabitEthernet0/0",
+        "ip address 192.168.1.1 255.255.255.0",
+        "no shutdown",
+        "exit",
+        "interface GigabitEthernet0/1",
+        "ip address 10.0.0.1 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "router ospf 1",
+        "router-id 1.1.1.1",
+        "network 192.168.1.0 0.0.0.255 area 0",
+        "network 10.0.0.0 0.0.0.3 area 0",
+        "passive-interface GigabitEthernet0/0",
+        "exit"
+      ],
+      "R2": [
+        "hostname R2",
+        "interface GigabitEthernet0/0",
+        "ip address 192.168.2.1 255.255.255.0",
+        "no shutdown",
+        "exit",
+        "interface GigabitEthernet0/1",
+        "ip address 10.0.0.2 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "interface GigabitEthernet0/2",
+        "ip address 10.0.0.5 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "router ospf 1",
+        "router-id 2.2.2.2",
+        "network 192.168.2.0 0.0.0.255 area 0",
+        "network 10.0.0.0 0.0.0.3 area 0",
+        "network 10.0.0.4 0.0.0.3 area 0",
+        "passive-interface GigabitEthernet0/0",
+        "exit"
+      ],
+      "R3": [
+        "hostname R3",
+        "interface GigabitEthernet0/0",
+        "ip address 192.168.3.1 255.255.255.0",
+        "no shutdown",
+        "exit",
+        "interface GigabitEthernet0/1",
+        "ip address 10.0.0.6 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "router ospf 1",
+        "router-id 3.3.3.3",
+        "network 192.168.3.0 0.0.0.255 area 0",
+        "network 10.0.0.4 0.0.0.3 area 0",
+        "passive-interface GigabitEthernet0/0",
+        "exit"
+      ],
+      "S1": [
+        "hostname S1"
+      ],
+      "S2": [
+        "hostname S2"
+      ],
+      "S3": [
+        "hostname S3"
+      ]
+    },
+    "pcIps": [
+      {
+        "name": "PC1",
+        "dhcp": false,
+        "ip": "192.168.1.10",
+        "mask": "255.255.255.0",
+        "gateway": "192.168.1.1"
+      },
+      {
+        "name": "PC2",
+        "dhcp": false,
+        "ip": "192.168.2.10",
+        "mask": "255.255.255.0",
+        "gateway": "192.168.2.1"
+      },
+      {
+        "name": "PC3",
+        "dhcp": false,
+        "ip": "192.168.3.10",
+        "mask": "255.255.255.0",
+        "gateway": "192.168.3.1"
+      }
+    ]
+  }
+}

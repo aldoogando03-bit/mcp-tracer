@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a new tool, validation check, model, prompt or other improvement.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should it work? Example tool calls or prompts are welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: ptbuilder
+    attributes:
+      label: What PTBuilder needs to do
+      description: |
+        mcp-tracer can only emit what PTBuilder's API offers: `addDevice`, `addLink`, `configureIosDevice`, `configurePcIp`, `addModule` and `getDevices` (see docs/PTBUILDER_API.md §2). If the feature needs anything else, say how you think it could be done.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

@@ -50,12 +50,13 @@ Only `src/index.ts`, `src/server.ts`, `src/tools/*`, `src/resources.ts` and `src
 ## Commands
 
 ```bash
-npm install
-npm run build      # tsc -> build/
+npm ci             # use npm >= 11 if you must regenerate package-lock.json (npm 10 crashes on vite's peers)
+npm run build      # clean + tsc -> build/
 npm run typecheck  # tsc --noEmit
 npm start          # node build/index.js (stdio server, waits for a client)
 npm run dev        # tsx src/index.ts, no build step
-npm test           # planned (Phase 2): vitest
+npm test           # vitest run
+npm run examples   # rebuild, then regenerate examples/*/script.js (fails on validation errors)
 ```
 
 Manual end-to-end check: `npx @modelcontextprotocol/inspector node build/index.js`.
