@@ -122,6 +122,61 @@ En Windows nativo (no WSL), envuelve `npx` en `cmd /c`: `claude mcp add mcp-trac
 
 Usa el mismo JSON `mcpServers` en `.cursor/mcp.json` dentro de tu proyecto, o en `~/.cursor/mcp.json` para todos los proyectos.
 
+### Otros clientes MCP
+
+MCP es un estándar abierto, así que mcp-tracer funciona con cualquier cliente MCP que pueda iniciar servidores stdio locales; solo cambia el lugar donde lo registras. Después, pides la red en lenguaje natural y la IA llama a las tools por su cuenta. No hay ningún comando especial que escribir.
+
+Estos clientes leen el mismo JSON `mcpServers` que se muestra para [Claude Desktop](#claude-desktop):
+
+- **VS Code** (modo agente de GitHub Copilot): el archivo portable de Copilot, `~/.copilot/mcp-config.json`, acepta este JSON. El `.vscode/mcp.json` de un workspace y el `mcp.json` de usuario (**MCP: Open User Configuration**) usan en cambio el formato propio de VS Code, que se muestra abajo.
+- **Windsurf / Devin Desktop**: en el panel de Cascade, abre el menú **...** y haz clic en **Open MCP config file**, en la sección MCPs.
+- **Cline**: haz clic en el ícono **MCP Servers**, abre la pestaña **Configure** y haz clic en **Configure MCP Servers**.
+- **LM Studio** 0.3.17 o posterior: en la pestaña **Program** de la barra lateral derecha, haz clic en **Install > Edit mcp.json**.
+- **Gemini CLI**: `~/.gemini/settings.json` para todos los proyectos, o `.gemini/settings.json` dentro de un proyecto. También puedes ejecutar `gemini mcp add -s user mcp-tracer npx -- -y mcp-tracer` (sin `-s user` escribe el archivo del proyecto).
+
+**El formato propio de VS Code** tiene una clave `servers` y un `type`:
+
+```json
+{
+  "servers": {
+    "mcp-tracer": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "mcp-tracer"]
+    }
+  }
+}
+```
+
+**Zed** usa una clave `context_servers` en su `settings.json` (**zed: open settings file**):
+
+```json
+{
+  "context_servers": {
+    "mcp-tracer": {
+      "command": "npx",
+      "args": ["-y", "mcp-tracer"]
+    }
+  }
+}
+```
+
+**OpenAI Codex** (CLI y extensión para IDE) lee `~/.codex/config.toml`, o `.codex/config.toml` en un proyecto de confianza:
+
+```toml
+[mcp_servers.mcp-tracer]
+command = "npx"
+args = ["-y", "mcp-tracer"]
+```
+
+También puedes ejecutar `codex mcp add mcp-tracer -- npx -y mcp-tracer`.
+
+Para definir [`MCP_TRACER_DIR`](#mcp_tracer_dir), agrega un objeto `env` junto a `args` (en Codex, una tabla `[mcp_servers.mcp-tracer.env]`). En Windows, si un cliente no logra iniciar el servidor, ejecuta `npx` a través de `cmd /c` como en la [nota para Windows](#nota-para-windows).
+
+**Nota sobre el modelo.** El modelo del cliente tiene que manejar bien las llamadas a tools. Los modelos locales pequeños pueden tener dificultades con topologías grandes. Los prompts incluidos (`vlan_lab`, `ospf_lab`, `dhcp_lab`, `nat_lab`) ayudan, porque ya contienen la topología calculada.
+
+**ChatGPT** en la web y en el celular todavía no es compatible: solo se conecta a servidores MCP remotos por HTTPS, y mcp-tracer se ejecuta localmente por stdio. La app de escritorio de ChatGPT comparte la configuración MCP de Codex, así que la configuración de Codex de arriba también le sirve, o puedes agregar mcp-tracer como servidor STDIO en **Settings > MCP servers**.
+
 ### Desde una copia del código fuente
 
 ```json
