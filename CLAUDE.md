@@ -33,6 +33,7 @@ Data flow:
 | `src/resources.ts` | `pt://catalog` and the `pt://catalog/{model}` template. |
 | `src/prompts.ts` | `vlan_lab`, `ospf_lab`, `dhcp_lab`, `nat_lab`: each embeds a computed `build_topology` spec. |
 | `src/version.ts`, `src/log.ts` | Version read from `package.json`; stderr-only logger. |
+| `site/` | Landing page (Vite + React + Motion, EN/ES), a separate package deployed on Vercel with Root Directory `site`. Not part of the npm package; see `site/README.md`. |
 
 Only `src/index.ts`, `src/server.ts`, `src/tools/*`, `src/resources.ts` and `src/prompts.ts` may import the MCP SDK. Everything else is pure and unit-testable.
 
