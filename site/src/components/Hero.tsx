@@ -13,8 +13,8 @@ export function Hero() {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  // Subtle depth while the hero scrolls away: the art drifts slower than the text.
-  const artShift = useTransform(scrollYProgress, [0, 1], ["translateY(0px)", "translateY(90px)"]);
+  // Subtle depth while the hero scrolls away: the art drifts up, away from the title, never onto it.
+  const artShift = useTransform(scrollYProgress, [0, 1], ["translateY(0px)", "translateY(-60px)"]);
 
   const enter = (i: number) =>
     reduce

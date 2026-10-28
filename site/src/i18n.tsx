@@ -7,7 +7,7 @@ type LangState = { lang: Lang; t: Content; setLang: (lang: Lang) => void };
 
 const LangContext = createContext<LangState | null>(null);
 
-/** ?lang=es in the URL wins, then the saved choice, then English. */
+/** ?lang=es in the URL wins, then the saved choice, then the browser's language, then English. */
 function initialLang(): Lang {
   const fromUrl = new URLSearchParams(window.location.search).get("lang");
   if (fromUrl === "en" || fromUrl === "es") return fromUrl;
@@ -17,7 +17,7 @@ function initialLang(): Lang {
   } catch {
     /* storage can be unavailable (private mode); fall through */
   }
-  return "en";
+  return navigator.languages.some((l) => l.toLowerCase().startsWith("es")) ? "es" : "en";
 }
 
 export function LangProvider({ children }: { children: ReactNode }) {

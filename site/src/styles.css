@@ -538,21 +538,30 @@ main,
   color: var(--text);
 }
 
+/* Every item starts with a "·"; shifting the list left and clipping that strip hides the dot that would
+   otherwise begin each wrapped line. */
 .hero-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 0;
-  margin: 0;
+  margin: 0 0 0 -1.4rem;
   padding: 0;
   list-style: none;
+  clip-path: inset(0 0 0 1.4rem);
   font-family: var(--mono);
   font-size: 0.75rem;
   color: var(--dim);
 }
 
-.hero-meta li + li::before {
+.hero-meta li {
+  white-space: nowrap;
+}
+
+.hero-meta li::before {
   content: "·";
-  margin: 0 0.6rem;
+  display: inline-block;
+  width: 1.4rem;
+  text-align: center;
 }
 
 @media (min-width: 960px) {
@@ -575,11 +584,11 @@ main,
     width: min(500px, 100%);
   }
 
-  /* The title overlaps the bottom of the ring, as in an editorial cover. */
+  /* The title overlaps the bottom arc of the ring, as in an editorial cover, but stays below the PC labels. */
   .hero-title {
     grid-column: 1 / 4;
     grid-row: 2;
-    margin-top: -4.5rem;
+    margin-top: -2rem;
     padding-right: var(--col-pad);
     text-align: right;
     font-size: clamp(4.75rem, 7.6vw, 7.25rem);
