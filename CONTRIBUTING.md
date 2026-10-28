@@ -41,7 +41,7 @@ To exercise the tools by hand, run the MCP Inspector: `npx @modelcontextprotocol
 
 ## Adding a model to the catalog
 
-1. Check that the model string is an exact key of PTBuilder's `allDeviceTypes` table (docs/PTBUILDER_API.md §5.1, mirrored in `PTBUILDER_MODELS` in `src/catalog.ts`). PTBuilder cannot create anything else.
+1. Check that the model string is an exact key of PTBuilder's `allDeviceTypes` table (every key is listed in `PTBUILDER_MODELS` in `src/catalog.ts`; see docs/PTBUILDER_API.md §5.1). PTBuilder cannot create anything else.
 2. Add an entry to `CATALOG` in `src/catalog.ts`:
    - `model`: the exact key. `aliases`: other names users type.
    - `category`, and `layer` for cable inference: 3 for router- or host-like devices, 2 for switch-like ones, 1 for hubs.

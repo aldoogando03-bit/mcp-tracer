@@ -385,7 +385,7 @@ To try the server by hand, use the MCP Inspector: `npx @modelcontextprotocol/ins
 
 mcp-tracer is an independent, community project. It is **not affiliated with, endorsed or sponsored by Cisco Systems, Inc.** Cisco and Cisco Packet Tracer are trademarks or registered trademarks of Cisco Systems, Inc. and/or its affiliates. They are used here only to describe what this software works with.
 
-mcp-tracer is also **not affiliated with PTBuilder or its author**. [PTBuilder](https://github.com/kimmknight/PTBuilder) is a separate project with its own terms; its repository declares no license. mcp-tracer does not bundle, copy or redistribute any PTBuilder code. It only generates scripts that call PTBuilder's documented functions, and you install PTBuilder yourself from its repository.
+mcp-tracer is also **not affiliated with PTBuilder or its author**. [PTBuilder](https://github.com/kimmknight/PTBuilder) is a separate project with its own terms; its repository declares no license. mcp-tracer does not include or redistribute any PTBuilder code. It generates scripts that call PTBuilder's functions, and you install PTBuilder yourself from its repository. Its documentation ([docs/PTBUILDER_API.md](docs/PTBUILDER_API.md)) describes how PTBuilder behaves in its own words and links to PTBuilder's source instead of copying it. mcp-tracer uses the model-key names that PTBuilder's API accepts (such as `ISR4331` or `PC-PT`) only for interoperability.
 
 You need your own, properly obtained copy of Cisco Packet Tracer.
 
