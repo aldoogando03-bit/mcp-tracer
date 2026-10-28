@@ -8,6 +8,8 @@ Un servidor MCP que permite a cualquier agente de IA diseñar topologías de Cis
 [![CI](https://github.com/aldoogando03-bit/mcp-tracer/actions/workflows/ci.yml/badge.svg)](https://github.com/aldoogando03-bit/mcp-tracer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+**Sitio web:** [mcp-tracer-web.vercel.app/?lang=es](https://mcp-tracer-web.vercel.app/?lang=es), un recorrido paso a paso con la configuración para cada cliente de IA.
+
 > mcp-tracer es un proyecto independiente. No está afiliado, respaldado ni patrocinado por Cisco Systems, Inc., ni por PTBuilder o su autor. Consulta el [aviso legal](#aviso-legal).
 
 ## Contenido

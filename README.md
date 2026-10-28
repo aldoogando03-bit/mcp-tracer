@@ -8,6 +8,8 @@ An MCP server that lets any AI agent design Cisco Packet Tracer topologies. The 
 [![CI](https://github.com/aldoogando03-bit/mcp-tracer/actions/workflows/ci.yml/badge.svg)](https://github.com/aldoogando03-bit/mcp-tracer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+**Website:** [mcp-tracer-web.vercel.app](https://mcp-tracer-web.vercel.app), a step-by-step overview with setup for each AI client.
+
 > mcp-tracer is an independent project. It is not affiliated with, endorsed or sponsored by Cisco Systems, Inc., nor by PTBuilder or its author. See the [disclaimer](#disclaimer).
 
 ## Contents

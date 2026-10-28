@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Project website at https://mcp-tracer-web.vercel.app (`site/`, English and Spanish), linked from the READMEs and set as the package `homepage`.
+
 ## [0.1.0] - 2026-10-27
 
 Initial public release.
