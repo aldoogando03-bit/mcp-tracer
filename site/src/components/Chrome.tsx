@@ -3,27 +3,15 @@ import { useLang } from "../i18n";
 import { SECTIONS, type SectionId } from "../motion";
 import { ArrowUpRight } from "./icons";
 
-/** The fixed vertical hairlines of the reference layout; they share the 5-column grid of every section. */
-export function GridLines() {
-  return (
-    <div className="gridlines" aria-hidden="true">
-      <div className="container gridlines-inner">
-        {Array.from({ length: 5 }, (_, i) => (
-          <span key={i} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function Nav({ active }: { active: SectionId }) {
   const { t, lang, setLang } = useLang();
   const links = SECTIONS.filter((s) => s !== "home");
 
   return (
     <header className="nav">
-      <div className="container nav-grid">
+      <div className="container nav-bar">
         <a className="logo" href="#home">
+          <span className="led led--green" aria-hidden="true" />
           mcp-tracer
         </a>
         <nav className="nav-links" aria-label={t.ui.sections}>
@@ -45,7 +33,7 @@ export function Nav({ active }: { active: SectionId }) {
               </button>
             ))}
           </div>
-          <a className="nav-gh press" href={LINKS.github} target="_blank" rel="noreferrer">
+          <a className="nav-gh btn btn--solid btn--small press" href={LINKS.github} target="_blank" rel="noreferrer">
             GitHub <ArrowUpRight size={14} />
             <span className="sr-only"> {t.ui.newTab}</span>
           </a>
@@ -55,7 +43,7 @@ export function Nav({ active }: { active: SectionId }) {
   );
 }
 
-/** Left-edge section indicator: dots, with a blue bar on the current section. */
+/** Left-edge section indicator: one port LED per section, lit green on the current one. */
 export function SectionRail({ active }: { active: SectionId }) {
   const { t } = useLang();
   return (

@@ -9,17 +9,17 @@ import { Reveal } from "./Reveal";
 function SectionHead({ index, title, intro, id }: { index: string; title: string; intro: string; id: string }) {
   return (
     <Reveal className="section-head">
-      <span className="section-index" aria-hidden="true">
-        {index}
+      {/* Interface-style label (Gi0/1, Gi0/2…): the page reads like ports on a switch. */}
+      <span className="tag section-index" aria-hidden="true">
+        <span className="led" />
+        Gi0/{Number(index)}
       </span>
-      <div className="section-heading">
-        <h2 id={id} className="section-title">
-          {title}
-        </h2>
-        <p className="section-intro">
-          <Prose text={intro} />
-        </p>
-      </div>
+      <h2 id={id} className="section-title">
+        {title}
+      </h2>
+      <p className="section-intro">
+        <Prose text={intro} />
+      </p>
     </Reveal>
   );
 }
@@ -208,7 +208,7 @@ export function Footer() {
         <Reveal className="footer-title">
           <p className="display">
             {t.footer.title.map((line) => (
-              <span key={line} className="hero-line">
+              <span key={line} className="display-line">
                 {line}
               </span>
             ))}
@@ -217,7 +217,7 @@ export function Footer() {
         <ul className="footer-links">
           {links.map((l) => (
             <li key={l.href}>
-              <a className="text-link" href={l.href} target="_blank" rel="noreferrer">
+              <a className="btn btn--invert press" href={l.href} target="_blank" rel="noreferrer">
                 {l.label} <ArrowUpRight size={14} />
                 <span className="sr-only"> {t.ui.newTab}</span>
               </a>

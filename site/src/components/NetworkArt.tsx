@@ -2,7 +2,7 @@ import { m, useReducedMotion } from "motion/react";
 import { EASE_OUT } from "../motion";
 
 const AMBER = "#f5a524";
-const GREEN = "#3ddc84";
+const GREEN = "#12b76a";
 
 type LinkDef = { d: string; leds: [number, number][] };
 
@@ -26,14 +26,16 @@ const LINK_START = 1.0;
 const LINK_STAGGER = 0.14;
 const LINK_DRAW = 0.55;
 
+/** Flat drafting-style devices: ink outline, paper fill and a hard offset shadow. */
 function PC({ x }: { x: number }) {
   return (
     <>
-      <rect x={x - 26} y={300} width={52} height={36} rx={3} fill="url(#bronze)" stroke="var(--rim)" />
-      <rect x={x - 21} y={304} width={42} height={26} rx={1.5} fill="#0b0d12" />
-      <rect x={x - 21} y={304} width={42} height={8} rx={1.5} fill="url(#screen-glow)" />
-      <rect x={x - 6} y={336} width={12} height={7} fill="url(#bronze)" />
-      <rect x={x - 16} y={343} width={32} height={4} rx={2} fill="url(#bronze)" stroke="var(--rim)" />
+      <rect x={x - 23} y={303} width={52} height={34} rx={4} fill="var(--ink)" />
+      <rect x={x - 26} y={299} width={52} height={34} rx={4} fill="var(--paper)" stroke="var(--ink)" strokeWidth={2} />
+      <rect x={x - 21} y={303} width={42} height={22} rx={2} fill="var(--ink)" />
+      <path d={`M${x - 15} 309 l5 4 -5 4`} fill="none" stroke="var(--signal)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <rect x={x - 4} y={333} width={8} height={6} fill="var(--ink)" />
+      <rect x={x - 15} y={339} width={30} height={4} rx={2} fill="var(--ink)" />
     </>
   );
 }
@@ -51,24 +53,7 @@ export function NetworkArt({ label }: { label: string }) {
         };
 
   return (
-    <svg className="network-art" viewBox="0 0 420 420" role="img" aria-label={label}>
-      <defs>
-        <linearGradient id="bronze" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#e6c9a1" />
-          <stop offset="0.32" stopColor="#ab7f55" />
-          <stop offset="0.68" stopColor="#5c3f27" />
-          <stop offset="1" stopColor="#21160d" />
-        </linearGradient>
-        <linearGradient id="bronze-top" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#f1dcbc" />
-          <stop offset="1" stopColor="#9a6f48" />
-        </linearGradient>
-        <linearGradient id="screen-glow" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#7c97ff" stopOpacity="0.35" />
-          <stop offset="1" stopColor="#7c97ff" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
+    <svg className="network-art" viewBox="0 0 420 400" role="img" aria-label={label}>
       {/* Links: draw, then their LEDs light amber and settle on green, like a port coming up in PT. */}
       {LINKS.map((link, i) => {
         const delay = LINK_START + i * LINK_STAGGER;
@@ -77,8 +62,8 @@ export function NetworkArt({ label }: { label: string }) {
             <m.path
               d={link.d}
               fill="none"
-              stroke="var(--cable)"
-              strokeWidth={1.5}
+              stroke="var(--ink)"
+              strokeWidth={2}
               strokeLinecap="round"
               initial={reduce ? false : { pathLength: 0 }}
               animate={{ pathLength: 1 }}
@@ -89,7 +74,9 @@ export function NetworkArt({ label }: { label: string }) {
                 key={`${cx}-${cy}`}
                 cx={cx}
                 cy={cy}
-                r={3}
+                r={3.5}
+                stroke="var(--paper)"
+                strokeWidth={1.5}
                 initial={reduce ? false : { opacity: 0, fill: AMBER }}
                 animate={{ opacity: 1, fill: GREEN }}
                 style={reduce ? { fill: GREEN } : undefined}
@@ -103,22 +90,34 @@ export function NetworkArt({ label }: { label: string }) {
         );
       })}
 
-      {/* R1: a Cisco-style router puck. */}
+      {/* R1: a router. */}
       <m.g className="node" {...node(0)}>
-        <path d="M170 95 v26 a40 13 0 0 0 80 0 v-26" fill="url(#bronze)" stroke="var(--rim)" />
-        <ellipse cx={210} cy={95} rx={40} ry={13} fill="url(#bronze-top)" stroke="var(--rim)" />
-        <path d="M198 91 l24 8 M222 91 l-24 8" stroke="#3a2716" strokeWidth={2} strokeLinecap="round" />
-        <text x={262} y={112} className="node-label">
+        <rect x={174} y={96} width={80} height={44} rx={8} fill="var(--ink)" />
+        <rect x={170} y={92} width={80} height={44} rx={8} fill="var(--paper)" stroke="var(--ink)" strokeWidth={2} />
+        <circle cx={210} cy={114} r={13} fill="none" stroke="var(--ink)" strokeWidth={2} />
+        <path
+          d="M203 107 l14 14 M217 107 l-14 14"
+          fill="none"
+          stroke="var(--signal)"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+        />
+        <text x={262} y={118} className="node-label">
           R1 · 2911
         </text>
       </m.g>
 
-      {/* S1: a switch box. */}
+      {/* S1: a switch with a row of ports. */}
       <m.g className="node" {...node(1)}>
-        <path d="M160 200 l10 -10 h100 l-10 10 z" fill="url(#bronze-top)" stroke="var(--rim)" />
-        <rect x={160} y={200} width={100} height={30} rx={2} fill="url(#bronze)" stroke="var(--rim)" />
-        <path d="M188 194 h44 M196 197 h44" stroke="#3a2716" strokeWidth={1.6} strokeLinecap="round" />
-        <text x={272} y={219} className="node-label">
+        <rect x={164} y={193} width={100} height={42} rx={6} fill="var(--ink)" />
+        <rect x={160} y={189} width={100} height={42} rx={6} fill="var(--paper)" stroke="var(--ink)" strokeWidth={2} />
+        <circle cx={171} cy={199} r={2.2} fill={GREEN} />
+        <circle cx={179} cy={199} r={2.2} fill={GREEN} />
+        <circle cx={187} cy={199} r={2.2} fill={AMBER} />
+        {Array.from({ length: 8 }, (_, i) => (
+          <rect key={i} x={168 + i * 11.5} y={210} width={8} height={10} rx={1} fill="var(--ink)" />
+        ))}
+        <text x={272} y={214} className="node-label">
           S1 · 2960-24TT
         </text>
       </m.g>
@@ -126,7 +125,7 @@ export function NetworkArt({ label }: { label: string }) {
       {PCS.map((pc, i) => (
         <m.g key={pc.label} className="node" {...node(2 + i)}>
           <PC x={pc.x} />
-          <text x={pc.x} y={364} textAnchor="middle" className="node-label">
+          <text x={pc.x} y={366} textAnchor="middle" className="node-label">
             {pc.label}
           </text>
         </m.g>
