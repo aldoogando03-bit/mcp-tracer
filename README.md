@@ -227,6 +227,14 @@ If a client fails to start the server (for example `spawn npx ENOENT`), run `npx
 }
 ```
 
+### Agent skill (optional)
+
+The repository also ships a skill, [`skills/mcp-tracer/SKILL.md`](skills/mcp-tracer/SKILL.md), that tells an agent when and how to use these tools: build with `build_topology`, always run `validate_config`, then hand over the script and the steps to run it. It does not replace the server; install both:
+
+```bash
+npx skills add aldoogando03-bit/mcp-tracer
+```
+
 ## Tools, resources and prompts
 
 ### Tools

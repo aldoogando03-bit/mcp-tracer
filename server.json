@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.aldoogando03-bit/mcp-tracer",
+  "description": "Design Cisco Packet Tracer topologies with AI agents and generate ready-to-run PTBuilder scripts.",
+  "repository": {
+    "url": "https://github.com/aldoogando03-bit/mcp-tracer",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "mcp-tracer",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
