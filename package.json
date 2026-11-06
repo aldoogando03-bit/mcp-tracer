@@ -1,6 +1,6 @@
 {
   "name": "mcp-tracer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "mcpName": "io.github.aldoogando03-bit/mcp-tracer",
   "description": "MCP server that lets any AI agent design Cisco Packet Tracer topologies by generating PTBuilder scripts.",
   "keywords": [

@@ -6,9 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-06
+
 ### Added
 
 - Project website at https://mcp-tracer-web.vercel.app (`site/`, English and Spanish), linked from the READMEs and set as the package `homepage`.
+- Agent skill, [skills/mcp-tracer/SKILL.md](skills/mcp-tracer/SKILL.md), that tells an agent when and how to use the tools. Install it with `npx skills add aldoogando03-bit/mcp-tracer`.
+- `mcpName` in `package.json` and a `server.json` at the repository root, the metadata the official MCP Registry needs to list the server.
+
+### Changed
+
+- Redesigned website: light "drafting table" look with an automatic dark mode.
 
 ## [0.1.0] - 2026-10-27
 
@@ -57,5 +65,6 @@ These fixes are relative to the unreleased `packet-tracer-mcp` prototype.
 - Port name normalization runs in linear time, device and port lookups use indexes, and the automatic layout always terminates, so oversized input can't stall the server.
 - Lookups keyed by user input use `Map`s or own-key checks, so names such as `constructor` never resolve to `Object.prototype` members.
 
-[Unreleased]: https://github.com/aldoogando03-bit/mcp-tracer/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/aldoogando03-bit/mcp-tracer/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/aldoogando03-bit/mcp-tracer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/aldoogando03-bit/mcp-tracer/releases/tag/v0.1.0
